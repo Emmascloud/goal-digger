@@ -1,0 +1,23 @@
+# Rust build output
+/target/
+**/target/
+*.dylib
+*.so
+*.dll
+
+# Secrets / local config (never commit)
+.env
+.env.*
+*.key
+secrets.*
+
+# Data prep local cache
+data-prep/.cache/
+data-prep/*.csv
+
+# OS / editor
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.swp

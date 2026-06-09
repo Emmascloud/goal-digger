@@ -1,0 +1,21 @@
+[
+  { "name": "Spain",       "elo": 2148, "xg_for": 2.25, "xg_against": 0.78, "aliases": ["ESP"] },
+  { "name": "France",      "elo": 2105, "xg_for": 2.20, "xg_against": 0.82, "aliases": ["FRA"] },
+  { "name": "Argentina",   "elo": 2098, "xg_for": 2.10, "xg_against": 0.80, "aliases": ["ARG"] },
+  { "name": "Brazil",      "elo": 2042, "xg_for": 2.15, "xg_against": 0.85, "aliases": ["BRA"] },
+  { "name": "England",     "elo": 2005, "xg_for": 2.00, "xg_against": 0.88, "aliases": ["ENG"] },
+  { "name": "Portugal",    "elo": 1998, "xg_for": 2.05, "xg_against": 0.90, "aliases": ["POR"] },
+  { "name": "Netherlands", "elo": 1975, "xg_for": 1.95, "xg_against": 0.92, "aliases": ["NED", "Holland"] },
+  { "name": "Germany",     "elo": 1948, "xg_for": 1.98, "xg_against": 0.95, "aliases": ["GER"] },
+  { "name": "Italy",       "elo": 1932, "xg_for": 1.80, "xg_against": 0.90, "aliases": ["ITA"] },
+  { "name": "Croatia",     "elo": 1885, "xg_for": 1.70, "xg_against": 1.00, "aliases": ["CRO"] },
+  { "name": "Belgium",     "elo": 1878, "xg_for": 1.85, "xg_against": 1.02, "aliases": ["BEL"] },
+  { "name": "Uruguay",     "elo": 1870, "xg_for": 1.72, "xg_against": 0.98, "aliases": ["URU"] },
+  { "name": "Morocco",     "elo": 1845, "xg_for": 1.55, "xg_against": 0.95, "aliases": ["MAR"] },
+  { "name": "USA",         "elo": 1760, "xg_for": 1.50, "xg_against": 1.10, "aliases": ["United States", "USMNT"] },
+  { "name": "Mexico",      "elo": 1748, "xg_for": 1.48, "xg_against": 1.12, "aliases": ["MEX"] },
+  { "name": "Canada",      "elo": 1702, "xg_for": 1.40, "xg_against": 1.18, "aliases": ["CAN"] },
+  { "name": "Colombia",    "elo": 1822, "xg_for": 1.60, "xg_against": 1.00, "aliases": ["COL"] },
+  { "name": "Japan",       "elo": 1812, "xg_for": 1.52, "xg_against": 1.02, "aliases": ["JPN"] },
+  { "name": "Senegal",     "elo": 1815, "xg_for": 1.55, "xg_against": 1.00, "aliases": ["SEN"] }
+]

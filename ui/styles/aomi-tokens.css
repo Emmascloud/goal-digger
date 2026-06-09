@@ -1,0 +1,213 @@
+/* ============================================================
+   Aomi Design System — Foundations
+   Natural Language On-Chain
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ---------- COLOR — Brand ---------- */
+  --aomi-pink:        #EC6C83;   /* primary brand pink, from logo */
+  --aomi-pink-soft:   #F2A4B3;   /* lighter, dusty rose */
+  --aomi-pink-deep:   #C84D67;   /* hover / pressed */
+  --aomi-blush:       #FBE6EA;   /* surface tint */
+  --aomi-coral:       #F4A28E;   /* sunset/peach accent */
+
+  /* ---------- COLOR — Ink / surfaces ---------- */
+  --aomi-ink:         #0A0B1C;   /* near-black with blue cast — bg.aomi-night */
+  --aomi-ink-2:       #14172E;   /* secondary midnight */
+  --aomi-ink-3:       #232847;   /* divider on dark */
+  --aomi-paper:       #FAF6F1;   /* cream — primary light surface */
+  --aomi-paper-2:     #F1ECE4;   /* secondary cream */
+  --aomi-pearl:       #FFFFFF;   /* pure white — cards on cream */
+
+  /* ---------- COLOR — Accents from photography ---------- */
+  --aomi-deep-sea:    #1B3A6B;   /* deep blue from imagery */
+  --aomi-sky:         #9CC6E8;   /* pale sky */
+  --aomi-iridescent:  #C9B6E4;   /* lavender shimmer */
+  --aomi-rust:        #8B3A3A;   /* dark red from coral landscape */
+
+  /* ---------- COLOR — Semantic foreground ---------- */
+  --fg-1:             var(--aomi-ink);     /* primary text on light */
+  --fg-2:             #4A4D63;             /* secondary text on light */
+  --fg-3:             #8A8DA0;             /* tertiary / meta on light */
+  --fg-on-dark-1:     #FAF6F1;             /* primary text on dark */
+  --fg-on-dark-2:     #B8B9CC;             /* secondary on dark */
+  --fg-on-dark-3:     #6E7191;             /* tertiary on dark */
+  --fg-brand:         var(--aomi-pink);
+
+  /* ---------- COLOR — Semantic surfaces ---------- */
+  --bg-canvas:        var(--aomi-paper);
+  --bg-canvas-dark:   var(--aomi-ink);
+  --bg-card:          var(--aomi-pearl);
+  --bg-card-dark:     var(--aomi-ink-2);
+  --bg-tint:          var(--aomi-blush);
+
+  /* ---------- COLOR — Semantic states ---------- */
+  --color-success:    #4A8F5E;
+  --color-warning:    #C68A3C;
+  --color-danger:     #B43C3C;
+  --color-info:       var(--aomi-deep-sea);
+
+  /* ---------- COLOR — Borders / hairlines ---------- */
+  --border-1:         rgba(10, 11, 28, 0.08);
+  --border-2:         rgba(10, 11, 28, 0.14);
+  --border-strong:    rgba(10, 11, 28, 0.32);
+  --border-on-dark-1: rgba(250, 246, 241, 0.10);
+  --border-on-dark-2: rgba(250, 246, 241, 0.20);
+
+  /* ---------- TYPE — Families ---------- */
+  --font-serif-display: 'Instrument Serif', 'Times New Roman', Georgia, serif;
+  --font-sans:          'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:          'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ---------- TYPE — Scale (1.250 / Major Third) ---------- */
+  --fs-xs:    12px;
+  --fs-sm:    14px;
+  --fs-base:  16px;
+  --fs-md:    18px;
+  --fs-lg:    22px;
+  --fs-xl:    28px;
+  --fs-2xl:   36px;
+  --fs-3xl:   48px;
+  --fs-4xl:   64px;
+  --fs-5xl:   88px;
+  --fs-6xl:   128px;
+
+  /* ---------- TYPE — Line heights ---------- */
+  --lh-tight:   1.02;
+  --lh-snug:    1.15;
+  --lh-normal:  1.45;
+  --lh-relaxed: 1.6;
+
+  /* ---------- TYPE — Tracking ---------- */
+  --tr-tight:    -0.02em;
+  --tr-display: -0.025em;
+  --tr-normal:   0;
+  --tr-loose:    0.04em;
+  --tr-eyebrow:  0.14em;
+
+  /* ---------- Spacing (4px base) ---------- */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  24px;
+  --space-6:  32px;
+  --space-7:  48px;
+  --space-8:  64px;
+  --space-9:  96px;
+  --space-10: 128px;
+
+  /* ---------- Radius ---------- */
+  --r-xs:   4px;
+  --r-sm:   8px;
+  --r-md:   12px;
+  --r-lg:   20px;
+  --r-xl:   28px;
+  --r-2xl:  40px;
+  --r-full: 999px;
+
+  /* ---------- Shadow / elevation ---------- */
+  --shadow-sm:  0 1px 2px rgba(10,11,28,0.06), 0 1px 1px rgba(10,11,28,0.04);
+  --shadow-md:  0 4px 12px rgba(10,11,28,0.08), 0 1px 3px rgba(10,11,28,0.05);
+  --shadow-lg:  0 16px 40px rgba(10,11,28,0.10), 0 4px 12px rgba(10,11,28,0.06);
+  --shadow-glow: 0 0 32px rgba(236,108,131,0.35), 0 0 1px rgba(236,108,131,0.6);
+  --shadow-inset: inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(10,11,28,0.06);
+
+  /* ---------- Motion ---------- */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-soft:   cubic-bezier(0.4, 0.0, 0.2, 1);
+  --t-fast:    140ms;
+  --t-base:    240ms;
+  --t-slow:    480ms;
+  --t-dreamy:  900ms;
+
+  /* ---------- Grain texture (data URI noise) ---------- */
+  --noise-url: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>");
+}
+
+/* ============================================================
+   Semantic type styles — apply directly to elements
+   ============================================================ */
+
+.aomi-display {
+  font-family: var(--font-serif-display);
+  font-weight: 400;
+  font-size: var(--fs-6xl);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tr-display);
+  font-style: italic;
+}
+
+.aomi-h1, h1.aomi {
+  font-family: var(--font-serif-display);
+  font-weight: 400;
+  font-size: var(--fs-4xl);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tr-display);
+}
+
+.aomi-h2, h2.aomi {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tr-tight);
+}
+
+.aomi-h3, h3.aomi {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: var(--fs-xl);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tr-tight);
+}
+
+.aomi-body, p.aomi {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: var(--fs-base);
+  line-height: var(--lh-relaxed);
+  color: var(--fg-2);
+}
+
+.aomi-body-sm {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+  color: var(--fg-2);
+}
+
+.aomi-eyebrow {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tr-eyebrow);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.aomi-mono, code.aomi {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  font-feature-settings: 'ss01', 'cv11';
+}
+
+.aomi-quote {
+  font-family: var(--font-serif-display);
+  font-style: italic;
+  font-size: var(--fs-3xl);
+  line-height: 1.18;
+  letter-spacing: -0.015em;
+}
+
+/* Inline brand-pink emphasis */
+.aomi-em-pink {
+  color: var(--aomi-pink);
+  font-style: italic;
+  font-family: var(--font-serif-display);
+}

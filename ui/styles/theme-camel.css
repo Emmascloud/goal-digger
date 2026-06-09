@@ -1,0 +1,91 @@
+/* ============================================================
+   Goal Digger — "Camel Brown" theme  ·  Legend-of-Zelda vibes
+   Loaded AFTER goaldigger.css. Redefines the --gd-* tokens and
+   adds warm parchment + Triforce-gold flourishes. The Aomi agent
+   panel keeps its own pink identity untouched.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Press+Start+2P&display=swap');
+
+:root {
+  /* value / underpriced — rupee green, warmed toward olive */
+  --gd-green-rgb: 161, 201, 84;
+  --gd-green:      #A6CF5B;
+  --gd-green-deep: #7CA235;
+
+  /* overpriced — terracotta */
+  --gd-red:        #D67149;
+  --gd-red-soft:   rgba(214, 113, 73, 0.15);
+
+  /* Triforce gold — the brand / structural accent */
+  --gd-gold-rgb:   230, 184, 70;
+  --gd-gold:       #E6B846;
+  --gd-gold-soft:  rgba(230, 184, 70, 0.15);
+
+  /* surfaces — aged leather / parchment-dark */
+  --gd-bg:     #15100A;
+  --gd-panel:  #1E170E;
+  --gd-card:   #271D11;
+  --gd-card-2: #2F2316;
+  --gd-raise:  #3A2B1A;
+
+  --gd-line:   rgba(233, 205, 154, 0.10);
+  --gd-line-2: rgba(233, 205, 154, 0.18);
+
+  --gd-fg-1:   #F4E8D2;
+  --gd-fg-2:   #C9B594;
+  --gd-fg-3:   #93805F;
+}
+
+/* warmer, slightly heavier parchment grain */
+.app::before { opacity: 0.055; }
+
+/* ---- Engraved fantasy serif for Goal Digger display type ---- */
+.section-title.serif {
+  font-family: 'Cinzel', serif;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #ECD7A4;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.45);
+}
+.detail-vs { font-family: 'Cinzel', serif; font-style: normal; color: var(--gd-gold); font-weight: 600; }
+.callout-fig .cf-val { font-family: 'Cinzel', serif; font-style: normal; font-weight: 600; }
+.callout-fig.model .cf-val { color: var(--gd-green); }
+
+/* ---- Triforce-gold structural accents (value stays green) ---- */
+.nav-item.active { background: var(--gd-gold-soft); }
+.nav-item.active [data-lucide] { color: var(--gd-gold); }
+.nav-item.active .nav-count { color: var(--gd-gold); }
+.nav-item.active { box-shadow: inset 2px 0 0 var(--gd-gold); }
+.nav-label { color: var(--gd-gold); opacity: 0.75; }
+
+/* carved-edge sheen on the major surfaces */
+.match, .edges, .wallet, .stat-tile { box-shadow: inset 0 1px 0 rgba(233,205,154,0.07); }
+.sheet, .trade { box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(233,205,154,0.10); }
+.match:hover { border-color: rgba(230,184,70,0.30); }
+
+/* scrollbars in warm tan */
+::-webkit-scrollbar-thumb { background: rgba(233,205,154,0.14); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(233,205,154,0.24); background-clip: content-box; }
+
+/* the section "sims each" meta gets a faint gold */
+.section-meta .mono { color: var(--gd-gold); }
+
+/* ---- Brand lockup: pixel footballer + Press Start wordmark ---- */
+.brand.brand-custom { gap: 12px; align-items: center; padding: 2px 4px; }
+.gd2-lockup { display: flex; align-items: center; gap: 12px; }
+.gd2-sprite {
+  height: 42px; width: auto; flex: none;
+  filter: drop-shadow(0 2px 0 rgba(0,0,0,0.45));
+  animation: gd2bob 2.8s var(--ease-out) infinite;
+}
+@keyframes gd2bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.gd2-word { display: flex; flex-direction: column; line-height: 1; }
+.gd2-w1, .gd2-w2 { font-family: 'Press Start 2P', monospace; font-size: 11px; letter-spacing: 0.5px; }
+.gd2-w1 { color: var(--gd-gold); text-shadow: 0 2px 0 rgba(0,0,0,0.5); }
+.gd2-w2 { color: var(--gd-fg-1); margin-top: 6px; text-shadow: 0 2px 0 rgba(0,0,0,0.5); }
+
+/* live + wallet "on" dots read as rupee-green; gold pulse ring on live */
+.live-dot { background: var(--gd-gold); }
+.live-dot { box-shadow: 0 0 0 0 rgba(var(--gd-gold-rgb), 0.5); animation: livepulseG 2.4s var(--ease-out) infinite; }
+@keyframes livepulseG { 0% { box-shadow: 0 0 0 0 rgba(var(--gd-gold-rgb),0.45);} 70%{ box-shadow: 0 0 0 7px rgba(var(--gd-gold-rgb),0);} 100%{ box-shadow:0 0 0 0 rgba(var(--gd-gold-rgb),0);} }

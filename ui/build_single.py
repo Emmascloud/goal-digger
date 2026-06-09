@@ -1,0 +1,59 @@
+"""Rebuild goal-digger-camel.html (single portable file) from the modular sources.
+
+Inlines styles/*.css, src/brand-camel.js, src/{data,components,views}.jsx, the App
+bootstrap from `goal digger2.html`, and the Aomi avatar PNG as a data URI.
+Run: python3 build_single.py
+"""
+import base64, pathlib, re
+
+ui = pathlib.Path(__file__).parent
+read = lambda p: (ui / p).read_text(encoding="utf-8")
+
+css = "\n".join(read(f"styles/{f}") for f in ["aomi-tokens.css", "goaldigger.css", "theme-camel.css"])
+brand = read("src/brand-camel.js")
+data_jsx = read("src/data.jsx")
+components_jsx = read("src/components.jsx")
+views_jsx = read("src/views.jsx")
+
+png = base64.b64encode((ui / "assets/aomi-symbol-pink.png").read_bytes()).decode()
+views_jsx = views_jsx.replace('src="assets/aomi-symbol-pink.png"', f'src="data:image/png;base64,{png}"')
+
+boot = read("goal digger2.html")
+app_inline = re.search(r'<script type="text/babel">(.*?)</script>\s*</body>', boot, re.S).group(1)
+
+html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Goal Digger — Camel Brown</title>
+  <style>
+{css}
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script>
+{brand}
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+{data_jsx}
+  </script>
+  <script type="text/babel">
+{components_jsx}
+  </script>
+  <script type="text/babel">
+{views_jsx}
+  </script>
+  <script type="text/babel">
+{app_inline}
+  </script>
+</body>
+</html>
+"""
+(ui / "goal-digger-camel.html").write_text(html, encoding="utf-8")
+print(f"wrote goal-digger-camel.html ({len(html):,} bytes)")
