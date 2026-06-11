@@ -2,13 +2,18 @@
    Goal Digger — UI components
    ============================================================ */
 
-// ---- Icon (lucide via CDN) ----
-const Icon = ({ name, size = 18, className = "", style = {} }) => (
-  <i data-lucide={name} className={className} style={{ width: size, height: size, display: "inline-flex", ...style }} />
-);
-const useLucide = (deps = []) => {
-  React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+// ---- Icon (lucide-react via CDN — real React components, no DOM mutation) ----
+const toPascalCase = (name) =>
+  name.replace(/(^\w|-\w)/g, (c) => c.replace("-", "").toUpperCase());
+
+const Icon = ({ name, size = 18, className = "", style = {} }) => {
+  const Cmp = window.LucideReact && window.LucideReact[toPascalCase(name)];
+  if (!Cmp) return null;
+  return <Cmp size={size} className={className} style={style} />;
 };
+
+// kept as a no-op so existing useLucide() call sites don't need to change
+const useLucide = () => {};
 
 // ---- Flag: abstract color bands, no emoji ----
 const Flag = ({ code, w = 30, h = 21 }) => {
@@ -172,7 +177,6 @@ const LeftRail = ({ active, setActive }) => {
     { k: "mybets", label: "My Bets", icon: "receipt-text", count: window.MY_BETS.length },
     { k: "live", label: "Live", icon: "radio", live: true },
   ];
-  useLucide();
   return (
     <aside className="rail-left">
       <div>
@@ -336,7 +340,6 @@ const StatTiles = ({ m }) => (
 );
 
 const MatchDetail = ({ m, onClose, onPlaceBet }) => {
-  useLucide();
   React.useEffect(() => {
     const h = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", h);

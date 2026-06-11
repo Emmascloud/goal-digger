@@ -218,7 +218,7 @@ fn ui_dir() -> PathBuf {
 fn serve_static(url: &str) -> Response<std::io::Cursor<Vec<u8>>> {
     let raw = url.splitn(2, '?').next().unwrap_or("/");
     let rel = urldecode(raw);
-    let rel = if rel == "/" { "goal digger2.html".to_string() } else { rel.trim_start_matches('/').to_string() };
+    let rel = if rel == "/" { "goal_digger2.html".to_string() } else { rel.trim_start_matches('/').to_string() };
     let path = ui_dir().join(&rel);
     // contain within ui/
     if !path.starts_with(ui_dir()) || !path.is_file() {
