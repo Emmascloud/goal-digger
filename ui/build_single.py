@@ -1,7 +1,7 @@
 """Rebuild goal-digger-camel.html (single portable file) from the modular sources.
 
 Inlines styles/*.css, src/brand-camel.js, src/{data,components,views}.jsx, the App
-bootstrap from `goal digger2.html`, and the Aomi avatar PNG as a data URI.
+bootstrap from `goal_digger2.html`, and the Aomi avatar PNG as a data URI.
 Run: python3 build_single.py
 """
 import base64, pathlib, re
@@ -18,7 +18,7 @@ views_jsx = read("src/views.jsx")
 png = base64.b64encode((ui / "assets/aomi-symbol-pink.png").read_bytes()).decode()
 views_jsx = views_jsx.replace('src="assets/aomi-symbol-pink.png"', f'src="data:image/png;base64,{png}"')
 
-boot = read("goal digger2.html")
+boot = read("goal_digger2.html")
 app_inline = re.search(r'<script type="text/babel">(.*?)</script>\s*</body>', boot, re.S).group(1)
 
 html = f"""<!DOCTYPE html>
@@ -33,7 +33,10 @@ html = f"""<!DOCTYPE html>
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script type="module">
+  import * as LucideReact from "https://esm.sh/lucide-react@0.383.0";
+  window.LucideReact = LucideReact;
+  </script>
   <script>
 {brand}
   </script>
