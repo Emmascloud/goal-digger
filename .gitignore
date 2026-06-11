@@ -21,3 +21,4 @@ data-prep/*.csv
 .idea/
 .vscode/
 *.swp
+.GOAL.md
