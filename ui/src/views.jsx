@@ -203,6 +203,16 @@ const ToolChips = ({ tools, running }) => {
   );
 };
 
+// Minimal markdown renderer — bold, italic, inline code, newlines.
+const renderMarkdown = (text) => ({
+  __html: text
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+    .replace(/`(.*?)`/g, "<code>$1</code>")
+    .replace(/\n/g, "<br>"),
+});
+
 const RightRail = ({ onOpenMatch }) => {
   const I = window.GD.Icon;
   window.GD.useLucide();
@@ -212,11 +222,13 @@ const RightRail = ({ onOpenMatch }) => {
       tools: [],
       content: (
         <>
-          I simulate every World Cup match {N("50,000")} times and compare the result to the live Polymarket price. Ask me where the value is, or open any match for the full breakdown.
+          GoalDigger live. I simulate every World Cup match {N("50,000")} times and compare the result to the live Polymarket price. Ask me where the value is, or open any match for the full breakdown.
         </>
       ),
     },
   ]);
+  // chatHistory tracks plain-text role/content pairs for the Anthropic API.
+  const [chatHistory, setChatHistory] = React.useState([]);
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const scrollRef = React.useRef(null);
@@ -225,25 +237,69 @@ const RightRail = ({ onOpenMatch }) => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   });
 
-  const send = (text) => {
+  const send = async (text) => {
     const q = (text ?? input).trim();
     if (!q || busy) return;
     setInput("");
     setBusy(true);
-    const resp = buildResponse(q, onOpenMatch);
+
+    const updatedHistory = [...chatHistory, { role: "user", content: q }];
+    setChatHistory(updatedHistory);
+
     setMessages((prev) => [
       ...prev,
       { role: "user", content: q },
-      { role: "assistant", pending: true, tools: resp.tools },
+      { role: "assistant", pending: true, tools: [] },
     ]);
-    setTimeout(() => {
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: updatedHistory,
+          context: window.__GD_BOARD__ || null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      const toolNames = (data.tool_calls || []).map((tc) => tc.name);
+      // Log tool calls to console for debugging during demo.
+      if (data.tool_calls?.length) {
+        console.groupCollapsed(`[GoalDigger] ${data.tool_calls.length} tool call(s)`);
+        data.tool_calls.forEach((tc) => console.log(`▶ ${tc.name}`, tc.input, "→", tc.result));
+        console.groupEnd();
+      }
+
+      setChatHistory([...updatedHistory, { role: "assistant", content: data.reply }]);
+
       setMessages((prev) => {
-        const copy = prev.slice();
-        copy[copy.length - 1] = { role: "assistant", tools: resp.tools, content: resp.content };
+        const copy = [...prev];
+        copy[copy.length - 1] = {
+          role: "assistant",
+          tools: toolNames,
+          content: <span dangerouslySetInnerHTML={renderMarkdown(data.reply)} />,
+        };
         return copy;
       });
+    } catch (err) {
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = {
+          role: "assistant",
+          tools: [],
+          content: `⚠️ ${err.message}`,
+        };
+        return copy;
+      });
+    } finally {
       setBusy(false);
-    }, 1500);
+    }
   };
 
   const suggestions = ["where's the value today?", "simulate Spain v Germany", "who wins it all?", "how should I size it?"];
