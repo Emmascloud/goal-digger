@@ -77,6 +77,12 @@
       if (window.loadLiveBoard) {
         try { if (await window.loadLiveBoard()) draw(); } catch (e) {}
       }
+      if (window.loadLivePrices) {
+        try { if (await window.loadLivePrices()) draw(); } catch (e) {}
+      }
+      if (window.startPricePolling) {
+        window.startPricePolling(draw);
+      }
     })();
   </script>
 </body>

@@ -106,6 +106,24 @@ const MatchCard = ({ m, onOpen }) => {
           </div>
         ))}
       </div>
+      {window.GD_PRICES_LIVE && (() => {
+        const lp = window.__GD_LIVE_PRICES || {};
+        const mv = window.__GD_PRICE_MOVES || {};
+        const pills = [m.home, m.away].map((t) => {
+          const price = lp[t.name];
+          if (price == null) return null;
+          const move = mv[t.name];
+          return (
+            <div key={t.code} className={"outright-pill" + (move ? " opill-flash-" + move.dir : "")}>
+              <Flag code={t.code} w={13} h={9} />
+              <span className="mono" style={{ fontSize: 11 }}>{window.fmtPrice(price)}</span>
+              {move && <span className={"price-arrow price-arrow-" + move.dir}>{move.dir === "up" ? "▲" : "▼"}</span>}
+              <span className="outright-pill-label">title</span>
+            </div>
+          );
+        }).filter(Boolean);
+        return pills.length ? <div className="match-outright-strip">{pills}</div> : null;
+      })()}
     </button>
   );
 };
@@ -130,44 +148,68 @@ const Board = ({ onOpen }) => (
 );
 
 // ---- Edges feed ----
-const EdgesFeed = ({ onPlaceBet, onOpen }) => (
-  <div className="block">
-    <div className="section-head">
-      <h2 className="section-title serif">Best value today</h2>
-      <div className="section-meta">ranked by edge · model − crowd</div>
-    </div>
-    <div className="edges">
-      <div className="edges-head">
-        <span>Market</span>
-        <span className="r">Model</span>
-        <span className="r">Crowd</span>
-        <span className="r">Edge</span>
-        <span className="r">Stake</span>
-        <span />
-      </div>
-      {window.EDGES.map((e, i) => (
-        <div className="edge-row" key={i}>
-          <div
-            className="edge-mkt"
-            style={{ cursor: e.kind === "match" ? "pointer" : "default" }}
-            onClick={() => e.kind === "match" && onOpen(e.matchId)}
-          >
-            <div className="m1">{e.title}</div>
-            <div className="m2 mono">{e.sub}</div>
-          </div>
-          <div className="edge-cell mono">{window.fmtPct(e.model_prob, 1)}</div>
-          <div className="edge-cell muted mono">{window.fmtPct(e.market_price, 1)}</div>
-          <div className={`edge-edge mono ${e.edge >= 0 ? "up" : "down"}`}>{window.fmtPts(e.edge)}</div>
-          <div className="edge-stake mono">{window.fmtUSD(e.suggested_stake)}</div>
-          <button className="btn btn-primary btn-sm" onClick={() => onPlaceBet({
-            label: e.title, sub: e.sub, side: typeof e.side === "string" && e.side.length <= 4 ? e.side : "Yes",
-            price: e.market_price, stake: e.suggested_stake, model: e.model_prob, edge: e.edge,
-          })}>Place bet</button>
+const EdgesFeed = ({ onPlaceBet, onOpen }) => {
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const moves = window.__GD_PRICE_MOVES || {};
+  const updatedAt = window.__GD_PRICES_UPDATED_AT;
+  const secSince = updatedAt ? Math.floor((Date.now() - updatedAt) / 1000) : null;
+  const ageLabel = secSince == null ? null : secSince < 5 ? "just now" : `${secSince}s ago`;
+
+  return (
+    <div className="block">
+      <div className="section-head">
+        <h2 className="section-title serif">Best value today</h2>
+        <div className="section-meta">
+          {window.GD_PRICES_LIVE
+            ? <><span className="prices-live-dot" />Polymarket live{ageLabel && <span className="prices-age"> · {ageLabel}</span>}</>
+            : "ranked by edge · model − crowd"
+          }
         </div>
-      ))}
+      </div>
+      <div className="edges">
+        <div className="edges-head">
+          <span>Market</span>
+          <span className="r">Model</span>
+          <span className="r">Crowd</span>
+          <span className="r">Edge</span>
+          <span className="r">Stake</span>
+          <span />
+        </div>
+        {window.EDGES.map((e, i) => {
+          const move = e.kind === "outright" ? moves[e.team] : null;
+          return (
+            <div className={`edge-row${move ? " price-move-" + move.dir : ""}`} key={i}>
+              <div
+                className="edge-mkt"
+                style={{ cursor: e.kind === "match" ? "pointer" : "default" }}
+                onClick={() => e.kind === "match" && onOpen(e.matchId)}
+              >
+                <div className="m1">{e.title}</div>
+                <div className="m2 mono">{e.sub}</div>
+              </div>
+              <div className="edge-cell mono">{window.fmtPct(e.model_prob, 1)}</div>
+              <div className={`edge-cell muted mono${move ? " crowd-flash crowd-flash-" + move.dir : ""}`}>
+                {move && <span className={"price-arrow price-arrow-" + move.dir}>{move.dir === "up" ? "▲" : "▼"}</span>}
+                {window.fmtPct(e.market_price, 1)}
+              </div>
+              <div className={`edge-edge mono ${e.edge >= 0 ? "up" : "down"}`}>{window.fmtPts(e.edge)}</div>
+              <div className="edge-stake mono">{window.fmtUSD(e.suggested_stake)}</div>
+              <button className="btn btn-primary btn-sm" onClick={() => onPlaceBet({
+                label: e.title, sub: e.sub, side: typeof e.side === "string" && e.side.length <= 4 ? e.side : "Yes",
+                price: e.market_price, stake: e.suggested_stake, model: e.model_prob, edge: e.edge,
+              })}>Place bet</button>
+            </div>
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ---- Left rail ----
 const LeftRail = ({ active, setActive }) => {

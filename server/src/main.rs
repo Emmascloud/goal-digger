@@ -89,6 +89,51 @@ fn price_fixture(f: &Fixture) -> Result<Value, String> {
     }))
 }
 
+// ─── Polymarket outright slugs for all 16 fixture teams ──────────────────────
+
+const SLUG_MAP: &[(&str, &str)] = &[
+    ("Spain",       "will-spain-win-the-2026-fifa-world-cup-963"),
+    ("Germany",     "will-germany-win-the-2026-fifa-world-cup-467"),
+    ("Argentina",   "will-argentina-win-the-2026-fifa-world-cup-245"),
+    ("Mexico",      "will-mexico-win-the-2026-fifa-world-cup-529"),
+    ("France",      "will-france-win-the-2026-fifa-world-cup-924"),
+    ("England",     "will-england-win-the-2026-fifa-world-cup-937"),
+    ("Brazil",      "will-brazil-win-the-2026-fifa-world-cup-183"),
+    ("Netherlands", "will-netherlands-win-the-2026-fifa-world-cup-739"),
+    ("Portugal",    "will-portugal-win-the-2026-fifa-world-cup-912"),
+    ("Uruguay",     "will-uruguay-win-the-2026-fifa-world-cup-932"),
+    ("Croatia",     "will-croatia-win-the-2026-fifa-world-cup"),
+    ("Morocco",     "will-morocco-win-the-2026-fifa-world-cup-464"),
+    ("USA",         "will-usa-win-the-2026-fifa-world-cup-467"),
+    ("Colombia",    "will-colombia-win-the-2026-fifa-world-cup-734"),
+    ("Japan",       "will-japan-win-the-2026-fifa-world-cup-112"),
+    ("Senegal",     "will-senegal-win-the-2026-fifa-world-cup"),
+];
+
+/// GET /api/prices — live Polymarket outright prices for all fixture teams.
+fn prices() -> Value {
+    let outrights: Vec<Value> = SLUG_MAP
+        .iter()
+        .filter_map(|(team, slug)| {
+            let market = data::gamma_market(slug).ok()?;
+            let price = market
+                .get("outcomes")
+                .and_then(|o| o.as_array())
+                .and_then(|arr| {
+                    arr.iter().find(|r| {
+                        r.get("outcome")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_lowercase() == "yes")
+                            .unwrap_or(false)
+                    })
+                })
+                .and_then(|r| r.get("price").and_then(|p| p.as_f64()))?;
+            Some(json!({ "team": team, "slug": slug, "market_price": price }))
+        })
+        .collect();
+    json!({ "outrights": outrights })
+}
+
 pub(crate) fn board() -> Value {
     let rows: Vec<Value> = fixtures()
         .iter()
@@ -253,6 +298,7 @@ fn main() {
                 }
                 (Method::Get, "/api/edge") => edge(&q),
                 (Method::Get, "/api/tournament") => tournament(&q),
+                (Method::Get, "/api/prices") => Ok(prices()),
                 (Method::Post, "/api/chat") => {
                     let mut body = String::new();
                     let _ = req.as_reader().read_to_string(&mut body);
