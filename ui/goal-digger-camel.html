@@ -761,6 +761,44 @@ html, body {
   .app { grid-template-columns: 200px minmax(0,1fr) 340px; }
 }
 
+/* ---- live / sample status badge ---- */
+.gd-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-family: var(--gd-mono, ui-monospace, monospace);
+}
+.gd-live-badge.on {
+  color: #07140c;
+  background: var(--gd-green, #38d66b);
+  box-shadow: 0 0 0 1px rgba(56, 214, 107, 0.45), 0 0 16px rgba(56, 214, 107, 0.5);
+}
+.gd-live-badge.off {
+  color: var(--gd-fg-3, #8a8f9c);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+.gd-live-pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.gd-live-badge.on .gd-live-pip {
+  background: #07140c;
+  animation: gd-live-pulse 1.4s ease-in-out infinite;
+}
+@keyframes gd-live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.65); }
+}
+
 /* ============================================================
    Goal Digger — "Camel Brown" theme  ·  Legend-of-Zelda vibes
    Loaded AFTER goaldigger.css. Redefines the --gd-* tokens and
@@ -1515,13 +1553,19 @@ const Board = ({ onOpen }) => (
     <div className="section-head">
       <h2 className="section-title serif">The Board</h2>
       <div className="section-meta">
+        <span className={`gd-live-badge ${window.GD_LIVE ? "on" : "off"}`}>
+          <span className="gd-live-pip" />{window.GD_LIVE ? "LIVE" : "SAMPLE"}
+        </span>
+        <span>·</span>
         <span className="mono">{window.MATCHES.length}</span> matches
         <span>·</span>
         <span className="mono">50,000</span> sims each
       </div>
     </div>
     <p className="section-sub">
-      Crowd is the live Polymarket price. Model is our simulated probability. Green marks an outcome the crowd has underpriced.
+      {window.GD_LIVE
+        ? "The real World Cup, priced live by the model — live scores and confirmed lineups. Tap a match for the full breakdown."
+        : "Live feed unavailable — showing saved sample matches so nothing breaks."}
     </p>
     <div className="board">
       {window.MATCHES.map((m) => <MatchCard key={m.id} m={m} onOpen={onOpen} />)}

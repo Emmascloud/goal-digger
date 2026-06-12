@@ -133,13 +133,19 @@ const Board = ({ onOpen }) => (
     <div className="section-head">
       <h2 className="section-title serif">The Board</h2>
       <div className="section-meta">
+        <span className={`gd-live-badge ${window.GD_LIVE ? "on" : "off"}`}>
+          <span className="gd-live-pip" />{window.GD_LIVE ? "LIVE" : "SAMPLE"}
+        </span>
+        <span>·</span>
         <span className="mono">{window.MATCHES.length}</span> matches
         <span>·</span>
         <span className="mono">50,000</span> sims each
       </div>
     </div>
     <p className="section-sub">
-      Crowd is the live Polymarket price. Model is our simulated probability. Green marks an outcome the crowd has underpriced.
+      {window.GD_LIVE
+        ? "The real World Cup, priced live by the model — live scores and confirmed lineups. Tap a match for the full breakdown."
+        : "Live feed unavailable — showing saved sample matches so nothing breaks."}
     </p>
     <div className="board">
       {window.MATCHES.map((m) => <MatchCard key={m.id} m={m} onOpen={onOpen} />)}
