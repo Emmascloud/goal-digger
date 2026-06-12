@@ -272,6 +272,7 @@ html, body {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'ss01', 'cv11', 'tnum';
+  color: white;
 }
 .serif { font-family: var(--font-serif-display); font-style: italic; }
 
@@ -380,7 +381,7 @@ html, body {
 .teams { display: flex; flex-direction: column; gap: 7px; margin-bottom: 13px; }
 .team { display: flex; align-items: center; gap: 10px; }
 .flag { width: 30px; height: 21px; border-radius: 3px; flex: none; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10); display: grid; }
-.team-name { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
+.team-name { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; color: white; }
 .team-code { font-size: 11px; color: var(--gd-fg-3); margin-left: 2px; }
 
 /* outcome mini-table */
@@ -466,11 +467,101 @@ html, body {
 .msg.user { align-items: flex-end; }
 .bubble { font-size: 13.5px; line-height: 1.55; padding: 10px 13px; border-radius: 14px; max-width: 86%; }
 .msg.user .bubble { background: var(--gd-raise); color: var(--gd-fg-1); border-bottom-right-radius: 4px; }
-.msg.assistant .bubble { background: var(--gd-card); color: var(--gd-fg-1); border: 1px solid var(--gd-line); border-bottom-left-radius: 4px; }
+.msg.assistant .bubble { background: var(--gd-card); color: var(--gd-fg-1); border: 1px solid var(--gd-line); border-bottom-left-radius: 4px; max-width: 100%; }
 .msg.assistant .bubble strong { color: var(--gd-green); font-weight: 600; }
 .msg.assistant .bubble .neg { color: var(--gd-red); }
 .msg.assistant .bubble em { font-family: var(--font-serif-display); font-style: italic; color: var(--gd-fg-1); }
 .msg .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- Live prices: dot, countdown, flash animations ---- */
+.prices-live-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 999px;
+  background: var(--gd-green); margin-right: 6px; vertical-align: middle;
+  animation: livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.prices-age { color: var(--gd-fg-3); }
+
+/* Price move arrows */
+.price-arrow-up   { font-size: 9px; margin-right: 3px; color: var(--gd-red); }
+.price-arrow-down { font-size: 9px; margin-right: 3px; color: var(--gd-green); }
+
+/* Crowd cell flash when price moves */
+@keyframes crowdFlashDown { 0%,100%{background:transparent} 25%{background:rgba(47,224,140,0.22);} }
+@keyframes crowdFlashUp   { 0%,100%{background:transparent} 25%{background:rgba(224,114,106,0.22);} }
+.crowd-flash-down { border-radius: 4px; animation: crowdFlashDown 3.5s ease; }
+.crowd-flash-up   { border-radius: 4px; animation: crowdFlashUp   3.5s ease; }
+
+/* Entire edge row highlight on move */
+@keyframes rowFlashDown { 0%,100%{background:transparent} 15%{background:rgba(47,224,140,0.07)} }
+@keyframes rowFlashUp   { 0%,100%{background:transparent} 15%{background:rgba(224,114,106,0.07)} }
+.edge-row.price-move-down { animation: rowFlashDown 3.5s ease; }
+.edge-row.price-move-up   { animation: rowFlashUp   3.5s ease; }
+
+/* Outright pill on match card */
+.match-outright-strip { display: flex; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid var(--gd-line); }
+.outright-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; padding: 3px 8px; border-radius: var(--r-full);
+  background: rgba(250,246,241,0.04); border: 1px solid var(--gd-line-2);
+  transition: border-color 0.2s;
+}
+.outright-pill-label { color: var(--gd-fg-3); font-size: 10px; }
+@keyframes opillDown { 0%,100%{background:rgba(250,246,241,0.04);border-color:var(--gd-line-2)} 25%{background:rgba(47,224,140,0.15);border-color:var(--gd-green-line)} }
+@keyframes opillUp   { 0%,100%{background:rgba(250,246,241,0.04);border-color:var(--gd-line-2)} 25%{background:rgba(224,114,106,0.15);border-color:rgba(224,114,106,0.4)} }
+.opill-flash-down { animation: opillDown 3.5s ease; }
+.opill-flash-up   { animation: opillUp   3.5s ease; }
+
+/* Scrolling price ticker strip */
+.price-ticker-wrap {
+  display: flex; align-items: center; overflow: hidden;
+  border-top: 1px solid var(--gd-line); border-bottom: 1px solid var(--gd-line);
+  background: rgba(0,0,0,0.25); height: 36px; margin: 0 -26px 18px;
+}
+.ticker-label {
+  flex: none; padding: 0 12px; font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--aomi-pink); border-right: 1px solid var(--gd-line); height: 100%;
+  display: flex; align-items: center; white-space: nowrap;
+  background-color: green;
+}
+.price-ticker {
+  display: flex; white-space: nowrap; will-change: transform;
+  animation: tickerScroll 55s linear infinite;
+}
+.price-ticker:hover { animation-play-state: paused; }
+@keyframes tickerScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.ticker-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 20px; border-right: 1px solid rgba(250,246,241,0.06); font-size: 12px;
+}
+.ticker-name { color: var(--gd-fg-3); font-size: 10.5px; letter-spacing: 0.02em; }
+.ticker-price { color: var(--gd-fg-1); }
+.ticker-price.pos { color: var(--gd-green); }
+.ticker-price.neg { color: var(--gd-red); }
+@keyframes tickerFlashDown { 0%,100%{background:transparent} 30%{background:rgba(47,224,140,0.18)} }
+@keyframes tickerFlashUp   { 0%,100%{background:transparent} 30%{background:rgba(224,114,106,0.18)} }
+.ticker-flash-down { animation: tickerFlashDown 3.5s ease; }
+.ticker-flash-up   { animation: tickerFlashUp   3.5s ease; }
+
+/* Markdown blocks rendered inside chat bubbles */
+.bubble .md-h1, .bubble .md-h2 { font-family: var(--font-serif-display); font-weight: 600; line-height: 1.3; margin: 12px 0 5px; color: var(--gd-fg-1); }
+.bubble .md-h1 { font-size: 15px; }
+.bubble .md-h2 { font-size: 14px; }
+.bubble .md-h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gd-fg-3); margin: 10px 0 4px; }
+.bubble .md-h1:first-child, .bubble .md-h2:first-child, .bubble .md-h3:first-child { margin-top: 2px; }
+.bubble .md-hr { border: none; border-top: 1px solid var(--gd-line); margin: 10px 0; }
+.bubble .md-p { margin: 4px 0; }
+.bubble .md-ul { margin: 5px 0 5px 14px; padding: 0; }
+.bubble .md-ul li { margin: 2px 0; }
+.bubble .md-bq { border-left: 2px solid var(--gd-green); padding: 2px 0 2px 10px; margin: 6px 0; color: var(--gd-fg-2); font-style: italic; }
+.bubble .md-gap { height: 5px; }
+.bubble .md-pre { background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px 10px; overflow-x: auto; font-family: var(--font-mono); font-size: 12px; margin: 6px 0; line-height: 1.5; }
+.bubble .md-table-wrap { overflow-x: auto; margin: 8px 0; }
+.md-table { border-collapse: collapse; font-size: 12px; width: 100%; }
+.md-table th { background: rgba(250,246,241,0.06); color: var(--gd-fg-2); font-weight: 600; text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--gd-line); white-space: nowrap; }
+.md-table td { padding: 4px 8px; border-bottom: 1px solid rgba(250,246,241,0.04); color: var(--gd-fg-1); }
+.md-table tr:last-child td { border-bottom: none; }
+.md-table tr:hover td { background: rgba(250,246,241,0.03); }
 
 .toolchips { display: flex; flex-wrap: wrap; gap: 6px; }
 .toolchip {
@@ -1049,6 +1140,7 @@ function buildEdges(matches = MATCHES) {
   OUTRIGHTS.forEach((o) => {
     rows.push({
       kind: "outright",
+      team: o.team,
       market: `will-${o.team.toLowerCase()}-win-the-2026-world-cup`,
       title: `${o.team} to win it all`,
       sub: "Outright · 2026 World Cup",
@@ -1132,12 +1224,77 @@ async function loadLiveBoard() {
     (data.matches || []).forEach((e) => { byId[e.id] = e; });
     const live = RAW_MATCHES.map((m) => (byId[m.id] ? deriveFromEngine(m, byId[m.id]) : deriveMatch(m)));
     const liveEdges = buildEdges(live);
-    Object.assign(window, { MATCHES: live, EDGES: liveEdges, GD_LIVE: true });
+    Object.assign(window, { MATCHES: live, EDGES: liveEdges, GD_LIVE: true, __GD_BOARD__: data });
     return true;
   } catch (e) {
     Object.assign(window, { GD_LIVE: false });
     return false;
   }
+}
+
+// SLUG_MAP team name → RAW_MATCHES display name where they differ.
+const SLUG_NAME_OVERRIDES = { "USA": "United States" };
+
+// Fetch /api/prices — live Polymarket outright winner prices for all fixture
+// teams. On success, patches OUTRIGHTS crowd prices and adds market_price to
+// CHAMPIONSHIP entries, then rebuilds EDGES so the EdgesFeed shows real gaps.
+// On any failure, hardcoded values stay — the UI never breaks.
+async function loadLivePrices() {
+  try {
+    const res = await fetch("/api/prices", { cache: "no-store" });
+    if (!res.ok) throw new Error("prices " + res.status);
+    const data = await res.json();
+
+    const prevPrices = window.__GD_LIVE_PRICES || {};
+    const byTeam = {};
+    const livePrices = {};
+    (data.outrights || []).forEach((o) => {
+      byTeam[o.team] = o.market_price;
+      livePrices[o.team] = o.market_price;
+    });
+    // Add match-name aliases so MatchCard lookups by m.home.name work.
+    Object.entries(SLUG_NAME_OVERRIDES).forEach(([slug, matchName]) => {
+      if (livePrices[slug] != null) livePrices[matchName] = livePrices[slug];
+    });
+
+    // Detect price moves; noise floor 0.0005 filters rounding drift.
+    const moves = {};
+    Object.entries(livePrices).forEach(([team, price]) => {
+      const prev = prevPrices[team];
+      if (prev != null && Math.abs(price - prev) > 0.0005)
+        moves[team] = { dir: price > prev ? "up" : "down", from: prev, to: price };
+    });
+
+    OUTRIGHTS.forEach((o) => { if (byTeam[o.team] != null) o.crowd = byTeam[o.team]; });
+    CHAMPIONSHIP.forEach((c) => { if (byTeam[c.team] != null) c.market_price = byTeam[c.team]; });
+    const liveEdges = buildEdges(window.MATCHES || MATCHES);
+
+    Object.assign(window, {
+      OUTRIGHTS, CHAMPIONSHIP, EDGES: liveEdges,
+      GD_PRICES_LIVE: true,
+      __GD_LIVE_PRICES: livePrices,
+      __GD_PRICE_MOVES: moves,
+      __GD_PRICES_UPDATED_AT: Date.now(),
+    });
+
+    // Auto-clear move indicators after the flash animation finishes (3.5s).
+    if (Object.keys(moves).length > 0)
+      setTimeout(() => { window.__GD_PRICE_MOVES = {}; }, 3500);
+
+    return true;
+  } catch (e) {
+    Object.assign(window, { GD_PRICES_LIVE: false });
+    return false;
+  }
+}
+
+// Poll /api/prices every intervalMs and call onUpdate() whenever a fetch
+// succeeds. Returns the interval ID so the caller can cancel if needed.
+function startPricePolling(onUpdate, intervalMs = 20000) {
+  return setInterval(async () => {
+    const updated = await loadLivePrices();
+    if (updated) onUpdate();
+  }, intervalMs);
 }
 
 const fmtPct = (x, dp = 0) => (x * 100).toFixed(dp) + "%";
@@ -1148,7 +1305,9 @@ const fmtUSD = (x) => "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2
 Object.assign(window, {
   WALLET, MATCHES, CHAMPIONSHIP, OUTRIGHTS, EDGES, MY_BETS, FLAGS,
   outcomeLabel, fmtPct, fmtPrice, fmtPts, fmtUSD,
-  loadLiveBoard, GD_LIVE: false,
+  loadLiveBoard, loadLivePrices, startPricePolling,
+  GD_LIVE: false, GD_PRICES_LIVE: false,
+  __GD_LIVE_PRICES: {}, __GD_PRICE_MOVES: {}, __GD_PRICES_UPDATED_AT: null,
 });
 
   </script>
@@ -1261,6 +1420,24 @@ const MatchCard = ({ m, onOpen }) => {
           </div>
         ))}
       </div>
+      {window.GD_PRICES_LIVE && (() => {
+        const lp = window.__GD_LIVE_PRICES || {};
+        const mv = window.__GD_PRICE_MOVES || {};
+        const pills = [m.home, m.away].map((t) => {
+          const price = lp[t.name];
+          if (price == null) return null;
+          const move = mv[t.name];
+          return (
+            <div key={t.code} className={"outright-pill" + (move ? " opill-flash-" + move.dir : "")}>
+              <Flag code={t.code} w={13} h={9} />
+              <span className="mono" style={{ fontSize: 11 }}>{window.fmtPrice(price)}</span>
+              {move && <span className={"price-arrow price-arrow-" + move.dir}>{move.dir === "up" ? "▲" : "▼"}</span>}
+              <span className="outright-pill-label">title</span>
+            </div>
+          );
+        }).filter(Boolean);
+        return pills.length ? <div className="match-outright-strip">{pills}</div> : null;
+      })()}
     </button>
   );
 };
@@ -1285,44 +1462,68 @@ const Board = ({ onOpen }) => (
 );
 
 // ---- Edges feed ----
-const EdgesFeed = ({ onPlaceBet, onOpen }) => (
-  <div className="block">
-    <div className="section-head">
-      <h2 className="section-title serif">Best value today</h2>
-      <div className="section-meta">ranked by edge · model − crowd</div>
-    </div>
-    <div className="edges">
-      <div className="edges-head">
-        <span>Market</span>
-        <span className="r">Model</span>
-        <span className="r">Crowd</span>
-        <span className="r">Edge</span>
-        <span className="r">Stake</span>
-        <span />
-      </div>
-      {window.EDGES.map((e, i) => (
-        <div className="edge-row" key={i}>
-          <div
-            className="edge-mkt"
-            style={{ cursor: e.kind === "match" ? "pointer" : "default" }}
-            onClick={() => e.kind === "match" && onOpen(e.matchId)}
-          >
-            <div className="m1">{e.title}</div>
-            <div className="m2 mono">{e.sub}</div>
-          </div>
-          <div className="edge-cell mono">{window.fmtPct(e.model_prob, 1)}</div>
-          <div className="edge-cell muted mono">{window.fmtPct(e.market_price, 1)}</div>
-          <div className={`edge-edge mono ${e.edge >= 0 ? "up" : "down"}`}>{window.fmtPts(e.edge)}</div>
-          <div className="edge-stake mono">{window.fmtUSD(e.suggested_stake)}</div>
-          <button className="btn btn-primary btn-sm" onClick={() => onPlaceBet({
-            label: e.title, sub: e.sub, side: typeof e.side === "string" && e.side.length <= 4 ? e.side : "Yes",
-            price: e.market_price, stake: e.suggested_stake, model: e.model_prob, edge: e.edge,
-          })}>Place bet</button>
+const EdgesFeed = ({ onPlaceBet, onOpen }) => {
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const moves = window.__GD_PRICE_MOVES || {};
+  const updatedAt = window.__GD_PRICES_UPDATED_AT;
+  const secSince = updatedAt ? Math.floor((Date.now() - updatedAt) / 1000) : null;
+  const ageLabel = secSince == null ? null : secSince < 5 ? "just now" : `${secSince}s ago`;
+
+  return (
+    <div className="block">
+      <div className="section-head">
+        <h2 className="section-title serif">Best value today</h2>
+        <div className="section-meta">
+          {window.GD_PRICES_LIVE
+            ? <><span className="prices-live-dot" />Polymarket live{ageLabel && <span className="prices-age"> · {ageLabel}</span>}</>
+            : "ranked by edge · model − crowd"
+          }
         </div>
-      ))}
+      </div>
+      <div className="edges">
+        <div className="edges-head">
+          <span>Market</span>
+          <span className="r">Model</span>
+          <span className="r">Crowd</span>
+          <span className="r">Edge</span>
+          <span className="r">Stake</span>
+          <span />
+        </div>
+        {window.EDGES.map((e, i) => {
+          const move = e.kind === "outright" ? moves[e.team] : null;
+          return (
+            <div className={`edge-row${move ? " price-move-" + move.dir : ""}`} key={i}>
+              <div
+                className="edge-mkt"
+                style={{ cursor: e.kind === "match" ? "pointer" : "default" }}
+                onClick={() => e.kind === "match" && onOpen(e.matchId)}
+              >
+                <div className="m1">{e.title}</div>
+                <div className="m2 mono">{e.sub}</div>
+              </div>
+              <div className="edge-cell mono">{window.fmtPct(e.model_prob, 1)}</div>
+              <div className={`edge-cell muted mono${move ? " crowd-flash crowd-flash-" + move.dir : ""}`}>
+                {move && <span className={"price-arrow price-arrow-" + move.dir}>{move.dir === "up" ? "▲" : "▼"}</span>}
+                {window.fmtPct(e.market_price, 1)}
+              </div>
+              <div className={`edge-edge mono ${e.edge >= 0 ? "up" : "down"}`}>{window.fmtPts(e.edge)}</div>
+              <div className="edge-stake mono">{window.fmtUSD(e.suggested_stake)}</div>
+              <button className="btn btn-primary btn-sm" onClick={() => onPlaceBet({
+                label: e.title, sub: e.sub, side: typeof e.side === "string" && e.side.length <= 4 ? e.side : "Yes",
+                price: e.market_price, stake: e.suggested_stake, model: e.model_prob, edge: e.edge,
+              })}>Place bet</button>
+            </div>
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ---- Left rail ----
 const LeftRail = ({ active, setActive }) => {
@@ -1794,6 +1995,102 @@ const ToolChips = ({ tools, running }) => {
   );
 };
 
+const renderMarkdown = (text) => {
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inl = (s) => esc(s)
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+    .replace(/`(.*?)`/g, "<code>$1</code>");
+  const parseCells = (row) => {
+    const parts = row.split("|");
+    const s = parts[0].trim() === "" ? 1 : 0;
+    const e = parts[parts.length - 1].trim() === "" ? parts.length - 1 : parts.length;
+    return parts.slice(s, e);
+  };
+  const isSep = (r) => { const c = parseCells(r); return c.length > 0 && c.every(x => /^\s*:?-+:?\s*$/.test(x)); };
+
+  const lines = text.split("\n");
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.trimStart().startsWith("```")) {
+      const fence = [];
+      i++;
+      while (i < lines.length && !lines[i].trimStart().startsWith("```")) {
+        fence.push(esc(lines[i]));
+        i++;
+      }
+      out.push(`<pre class="md-pre"><code>${fence.join("\n")}</code></pre>`);
+      i++;
+      continue;
+    }
+
+    // Headings
+    if (/^### /.test(line)) { out.push(`<h3 class="md-h3">${inl(line.slice(4))}</h3>`); i++; continue; }
+    if (/^## /.test(line))  { out.push(`<h2 class="md-h2">${inl(line.slice(3))}</h2>`); i++; continue; }
+    if (/^# /.test(line))   { out.push(`<h1 class="md-h1">${inl(line.slice(2))}</h1>`); i++; continue; }
+
+    // HR (must be before table since --- is a table separator too)
+    if (/^-{3,}\s*$/.test(line.trim())) { out.push('<hr class="md-hr">'); i++; continue; }
+
+    // Table
+    if (line.trimStart().startsWith("|")) {
+      const rows = [];
+      while (i < lines.length && lines[i].trimStart().startsWith("|")) {
+        rows.push(lines[i]);
+        i++;
+      }
+      const hasSep = rows.some(isSep);
+      const dataRows = rows.filter(r => !isSep(r));
+      if (dataRows.length) {
+        out.push('<div class="md-table-wrap"><table class="md-table">');
+        dataRows.forEach((row, ri) => {
+          const cells = parseCells(row);
+          const tag = hasSep && ri === 0 ? "th" : "td";
+          out.push("<tr>" + cells.map(c => `<${tag}>${inl(c.trim())}</${tag}>`).join("") + "</tr>");
+        });
+        out.push("</table></div>");
+      }
+      continue;
+    }
+
+    // Blockquote
+    if (/^> /.test(line)) {
+      const bqs = [];
+      while (i < lines.length && /^> /.test(lines[i])) {
+        bqs.push(inl(lines[i].slice(2)));
+        i++;
+      }
+      out.push(`<blockquote class="md-bq">${bqs.join("<br>")}</blockquote>`);
+      continue;
+    }
+
+    // Unordered list
+    if (/^[-*] /.test(line)) {
+      out.push('<ul class="md-ul">');
+      while (i < lines.length && /^[-*] /.test(lines[i])) {
+        out.push(`<li>${inl(lines[i].slice(2))}</li>`);
+        i++;
+      }
+      out.push("</ul>");
+      continue;
+    }
+
+    // Empty line → small gap
+    if (line.trim() === "") { out.push('<div class="md-gap"></div>'); i++; continue; }
+
+    // Paragraph
+    out.push(`<p class="md-p">${inl(line)}</p>`);
+    i++;
+  }
+
+  return { __html: out.join("") };
+};
+
 const RightRail = ({ onOpenMatch }) => {
   const I = window.GD.Icon;
   window.GD.useLucide();
@@ -1803,11 +2100,13 @@ const RightRail = ({ onOpenMatch }) => {
       tools: [],
       content: (
         <>
-          I simulate every World Cup match {N("50,000")} times and compare the result to the live Polymarket price. Ask me where the value is, or open any match for the full breakdown.
+          GoalDigger live. I simulate every World Cup match {N("50,000")} times and compare the result to the live Polymarket price. Ask me where the value is, or open any match for the full breakdown.
         </>
       ),
     },
   ]);
+  // chatHistory tracks plain-text role/content pairs for the Anthropic API.
+  const [chatHistory, setChatHistory] = React.useState([]);
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const scrollRef = React.useRef(null);
@@ -1816,25 +2115,69 @@ const RightRail = ({ onOpenMatch }) => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   });
 
-  const send = (text) => {
+  const send = async (text) => {
     const q = (text ?? input).trim();
     if (!q || busy) return;
     setInput("");
     setBusy(true);
-    const resp = buildResponse(q, onOpenMatch);
+
+    const updatedHistory = [...chatHistory, { role: "user", content: q }];
+    setChatHistory(updatedHistory);
+
     setMessages((prev) => [
       ...prev,
       { role: "user", content: q },
-      { role: "assistant", pending: true, tools: resp.tools },
+      { role: "assistant", pending: true, tools: [] },
     ]);
-    setTimeout(() => {
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: updatedHistory,
+          context: window.__GD_BOARD__ || null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      const toolNames = (data.tool_calls || []).map((tc) => tc.name);
+      // Log tool calls to console for debugging during demo.
+      if (data.tool_calls?.length) {
+        console.groupCollapsed(`[GoalDigger] ${data.tool_calls.length} tool call(s)`);
+        data.tool_calls.forEach((tc) => console.log(`▶ ${tc.name}`, tc.input, "→", tc.result));
+        console.groupEnd();
+      }
+
+      setChatHistory([...updatedHistory, { role: "assistant", content: data.reply }]);
+
       setMessages((prev) => {
-        const copy = prev.slice();
-        copy[copy.length - 1] = { role: "assistant", tools: resp.tools, content: resp.content };
+        const copy = [...prev];
+        copy[copy.length - 1] = {
+          role: "assistant",
+          tools: toolNames,
+          content: <span dangerouslySetInnerHTML={renderMarkdown(data.reply)} />,
+        };
         return copy;
       });
+    } catch (err) {
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = {
+          role: "assistant",
+          tools: [],
+          content: `⚠️ ${err.message}`,
+        };
+        return copy;
+      });
+    } finally {
       setBusy(false);
-    }, 1500);
+    }
   };
 
   const suggestions = ["where's the value today?", "simulate Spain v Germany", "who wins it all?", "how should I size it?"];
@@ -1914,14 +2257,71 @@ const MyBets = ({ onPlaceBet }) => (
   </div>
 );
 
+// Scrolling live odds ticker — shown at the top of the Live page.
+const PriceTicker = () => {
+  const lp = window.__GD_LIVE_PRICES || {};
+  const mv = window.__GD_PRICE_MOVES || {};
+  const entries = Object.entries(lp).filter(([t]) => !Object.values({ "United States": "USA" }).includes(t));
+  if (!entries.length || !window.GD_PRICES_LIVE) return null;
+
+  // Build a code map from all matches for flag display.
+  const codeMap = {};
+  (window.MATCHES || []).forEach((m) => {
+    codeMap[m.home.name] = m.home.code;
+    codeMap[m.away.name] = m.away.code;
+  });
+  // SLUG_MAP name → match display name for code resolution.
+  const SLUG_NAME = { "USA": "United States" };
+  entries.forEach(([t]) => { if (SLUG_NAME[t]) codeMap[t] = codeMap[SLUG_NAME[t]]; });
+
+  // Duplicate entries for seamless infinite scroll.
+  const items = [...entries, ...entries];
+
+  return (
+    <div className="price-ticker-wrap">
+      <span className="ticker-label">LIVE ODDS</span>
+      <div className="price-ticker">
+        {items.map(([team, price], i) => {
+          const move = mv[team];
+          const code = codeMap[team];
+          return (
+            <span key={i} className={"ticker-item" + (move ? " ticker-flash-" + move.dir : "")}>
+              {code && <window.GD.Flag code={code} w={14} h={10} />}
+              <span className="ticker-name">{team}</span>
+              <span className={"ticker-price mono" + (move ? (move.dir === "up" ? " neg" : " pos") : "")}>
+                {move && (move.dir === "up" ? "▲ " : "▼ ")}{window.fmtPrice(price)}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const LiveView = ({ onOpen }) => {
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const live = window.MATCHES.filter((m) => m.soon);
+  const updatedAt = window.__GD_PRICES_UPDATED_AT;
+  const secSince = updatedAt ? Math.floor((Date.now() - updatedAt) / 1000) : null;
+  const ageLabel = secSince == null ? "" : secSince < 5 ? " · just updated" : ` · odds ${secSince}s ago`;
+
   return (
     <div className="block">
       <div className="section-head">
         <h2 className="section-title serif">Live</h2>
-        <div className="section-meta"><span className="live-dot" style={{ position: "static" }} /> {live.length} kicking off soon</div>
+        <div className="section-meta">
+          <span className="live-dot" style={{ position: "static" }} />
+          {live.length} kicking off soon
+          {window.GD_PRICES_LIVE && <span className="prices-age">{ageLabel}</span>}
+        </div>
       </div>
+      <PriceTicker />
       <p className="section-sub">Matches starting within the hour. The model re-runs as line-ups confirm and prices move.</p>
       <div className="board">
         {live.map((m) => <window.GD.MatchCard key={m.id} m={m} onOpen={onOpen} />)}
@@ -1983,6 +2383,12 @@ window.GD = Object.assign(window.GD || {}, { TradeModal, RightRail, MyBets, Live
       // stays on bundled mock when opened as a bare file (fetch just fails).
       if (window.loadLiveBoard) {
         try { if (await window.loadLiveBoard()) draw(); } catch (e) {}
+      }
+      if (window.loadLivePrices) {
+        try { if (await window.loadLivePrices()) draw(); } catch (e) {}
+      }
+      if (window.startPricePolling) {
+        window.startPricePolling(draw);
       }
     })();
   
