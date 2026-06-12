@@ -350,7 +350,7 @@ async function loadLiveBoard() {
     (data.matches || []).forEach((e) => { byId[e.id] = e; });
     const live = RAW_MATCHES.map((m) => (byId[m.id] ? deriveFromEngine(m, byId[m.id]) : deriveMatch(m)));
     const liveEdges = buildEdges(live);
-    Object.assign(window, { MATCHES: live, EDGES: liveEdges, GD_LIVE: true });
+    Object.assign(window, { MATCHES: live, EDGES: liveEdges, GD_LIVE: true, __GD_BOARD__: data });
     return true;
   } catch (e) {
     Object.assign(window, { GD_LIVE: false });

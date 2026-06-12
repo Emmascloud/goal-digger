@@ -9,11 +9,13 @@
 //!   POST /api/simulate     -> one match: {home, away, neutral, knockout, *_adj}
 //!   GET  /api/edge         -> model vs live Polymarket price (Gamma) ?slug&outcome&model_prob
 //!   GET  /api/tournament   -> title probabilities ?teams=A,B,C,...
+//!   POST /api/chat         -> agentic Claude loop with 6 engine tools (requires ANTHROPIC_API_KEY)
 
 #[path = "../../app/src/sim.rs"]
 mod sim;
 #[path = "../../app/src/data.rs"]
 mod data;
+mod chat;
 
 use serde_json::{json, Value};
 use sim::{Adjustments, MatchSetup};
@@ -87,7 +89,7 @@ fn price_fixture(f: &Fixture) -> Result<Value, String> {
     }))
 }
 
-fn board() -> Value {
+pub(crate) fn board() -> Value {
     let rows: Vec<Value> = fixtures()
         .iter()
         .filter_map(|f| price_fixture(f).ok())
@@ -95,7 +97,7 @@ fn board() -> Value {
     json!({ "source": "goal-digger-engine", "model": "dixon-coles+elo+xg/monte-carlo", "matches": rows })
 }
 
-fn simulate_body(body: &str) -> Result<Value, String> {
+pub(crate) fn simulate_body(body: &str) -> Result<Value, String> {
     let v: Value = serde_json::from_str(body).map_err(|e| format!("bad json: {e}"))?;
     let home = data::team_strength(v.get("home").and_then(|x| x.as_str()).unwrap_or(""))?;
     let away = data::team_strength(v.get("away").and_then(|x| x.as_str()).unwrap_or(""))?;
@@ -114,7 +116,7 @@ fn simulate_body(body: &str) -> Result<Value, String> {
     Ok(serde_json::to_value(sim::simulate(&setup)).unwrap())
 }
 
-fn edge(q: &Query) -> Result<Value, String> {
+pub(crate) fn edge(q: &Query) -> Result<Value, String> {
     let slug = q.get("slug").ok_or("missing slug")?;
     let outcome = q.get("outcome").ok_or("missing outcome")?;
     let model_prob: f64 = q.get("model_prob").and_then(|s| s.parse().ok()).ok_or("missing model_prob")?;
@@ -131,7 +133,7 @@ fn edge(q: &Query) -> Result<Value, String> {
         "edge": (e * 10000.0).round() / 10000.0, "verdict": if e >= 0.04 { "VALUE_BUY" } else if e <= -0.04 { "OVERPRICED" } else { "FAIR" } }))
 }
 
-fn tournament(q: &Query) -> Result<Value, String> {
+pub(crate) fn tournament(q: &Query) -> Result<Value, String> {
     let names: Vec<String> = q.get("teams").ok_or("missing teams")?.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
     let mut strengths = Vec::new();
     for n in &names {
@@ -144,9 +146,9 @@ fn tournament(q: &Query) -> Result<Value, String> {
 
 // ─── tiny HTTP plumbing ──────────────────────────────────────────────────────
 
-struct Query(Vec<(String, String)>);
+pub(crate) struct Query(Vec<(String, String)>);
 impl Query {
-    fn parse(url: &str) -> Self {
+    pub(crate) fn parse(url: &str) -> Self {
         let q = url.splitn(2, '?').nth(1).unwrap_or("");
         let pairs = q
             .split('&')
@@ -161,6 +163,10 @@ impl Query {
     fn get(&self, k: &str) -> Option<&str> {
         self.0.iter().find(|(key, _)| key == k).map(|(_, v)| v.as_str())
     }
+}
+
+pub(crate) fn urldecode_noop(s: &str) -> &str {
+    s
 }
 
 fn urldecode(s: &str) -> String {
@@ -247,6 +253,11 @@ fn main() {
                 }
                 (Method::Get, "/api/edge") => edge(&q),
                 (Method::Get, "/api/tournament") => tournament(&q),
+                (Method::Post, "/api/chat") => {
+                    let mut body = String::new();
+                    let _ = req.as_reader().read_to_string(&mut body);
+                    chat::handle(&body)
+                }
                 _ => Err("unknown endpoint".into()),
             };
             let payload = match result {

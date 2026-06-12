@@ -203,6 +203,102 @@ const ToolChips = ({ tools, running }) => {
   );
 };
 
+const renderMarkdown = (text) => {
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inl = (s) => esc(s)
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+    .replace(/`(.*?)`/g, "<code>$1</code>");
+  const parseCells = (row) => {
+    const parts = row.split("|");
+    const s = parts[0].trim() === "" ? 1 : 0;
+    const e = parts[parts.length - 1].trim() === "" ? parts.length - 1 : parts.length;
+    return parts.slice(s, e);
+  };
+  const isSep = (r) => { const c = parseCells(r); return c.length > 0 && c.every(x => /^\s*:?-+:?\s*$/.test(x)); };
+
+  const lines = text.split("\n");
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.trimStart().startsWith("```")) {
+      const fence = [];
+      i++;
+      while (i < lines.length && !lines[i].trimStart().startsWith("```")) {
+        fence.push(esc(lines[i]));
+        i++;
+      }
+      out.push(`<pre class="md-pre"><code>${fence.join("\n")}</code></pre>`);
+      i++;
+      continue;
+    }
+
+    // Headings
+    if (/^### /.test(line)) { out.push(`<h3 class="md-h3">${inl(line.slice(4))}</h3>`); i++; continue; }
+    if (/^## /.test(line))  { out.push(`<h2 class="md-h2">${inl(line.slice(3))}</h2>`); i++; continue; }
+    if (/^# /.test(line))   { out.push(`<h1 class="md-h1">${inl(line.slice(2))}</h1>`); i++; continue; }
+
+    // HR (must be before table since --- is a table separator too)
+    if (/^-{3,}\s*$/.test(line.trim())) { out.push('<hr class="md-hr">'); i++; continue; }
+
+    // Table
+    if (line.trimStart().startsWith("|")) {
+      const rows = [];
+      while (i < lines.length && lines[i].trimStart().startsWith("|")) {
+        rows.push(lines[i]);
+        i++;
+      }
+      const hasSep = rows.some(isSep);
+      const dataRows = rows.filter(r => !isSep(r));
+      if (dataRows.length) {
+        out.push('<div class="md-table-wrap"><table class="md-table">');
+        dataRows.forEach((row, ri) => {
+          const cells = parseCells(row);
+          const tag = hasSep && ri === 0 ? "th" : "td";
+          out.push("<tr>" + cells.map(c => `<${tag}>${inl(c.trim())}</${tag}>`).join("") + "</tr>");
+        });
+        out.push("</table></div>");
+      }
+      continue;
+    }
+
+    // Blockquote
+    if (/^> /.test(line)) {
+      const bqs = [];
+      while (i < lines.length && /^> /.test(lines[i])) {
+        bqs.push(inl(lines[i].slice(2)));
+        i++;
+      }
+      out.push(`<blockquote class="md-bq">${bqs.join("<br>")}</blockquote>`);
+      continue;
+    }
+
+    // Unordered list
+    if (/^[-*] /.test(line)) {
+      out.push('<ul class="md-ul">');
+      while (i < lines.length && /^[-*] /.test(lines[i])) {
+        out.push(`<li>${inl(lines[i].slice(2))}</li>`);
+        i++;
+      }
+      out.push("</ul>");
+      continue;
+    }
+
+    // Empty line → small gap
+    if (line.trim() === "") { out.push('<div class="md-gap"></div>'); i++; continue; }
+
+    // Paragraph
+    out.push(`<p class="md-p">${inl(line)}</p>`);
+    i++;
+  }
+
+  return { __html: out.join("") };
+};
+
 const RightRail = ({ onOpenMatch }) => {
   const I = window.GD.Icon;
   window.GD.useLucide();
@@ -212,11 +308,13 @@ const RightRail = ({ onOpenMatch }) => {
       tools: [],
       content: (
         <>
-          I simulate every World Cup match {N("50,000")} times and compare the result to the live Polymarket price. Ask me where the value is, or open any match for the full breakdown.
+          GoalDigger live. I simulate every World Cup match {N("50,000")} times and compare the result to the live Polymarket price. Ask me where the value is, or open any match for the full breakdown.
         </>
       ),
     },
   ]);
+  // chatHistory tracks plain-text role/content pairs for the Anthropic API.
+  const [chatHistory, setChatHistory] = React.useState([]);
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const scrollRef = React.useRef(null);
@@ -225,25 +323,69 @@ const RightRail = ({ onOpenMatch }) => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   });
 
-  const send = (text) => {
+  const send = async (text) => {
     const q = (text ?? input).trim();
     if (!q || busy) return;
     setInput("");
     setBusy(true);
-    const resp = buildResponse(q, onOpenMatch);
+
+    const updatedHistory = [...chatHistory, { role: "user", content: q }];
+    setChatHistory(updatedHistory);
+
     setMessages((prev) => [
       ...prev,
       { role: "user", content: q },
-      { role: "assistant", pending: true, tools: resp.tools },
+      { role: "assistant", pending: true, tools: [] },
     ]);
-    setTimeout(() => {
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: updatedHistory,
+          context: window.__GD_BOARD__ || null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      const toolNames = (data.tool_calls || []).map((tc) => tc.name);
+      // Log tool calls to console for debugging during demo.
+      if (data.tool_calls?.length) {
+        console.groupCollapsed(`[GoalDigger] ${data.tool_calls.length} tool call(s)`);
+        data.tool_calls.forEach((tc) => console.log(`▶ ${tc.name}`, tc.input, "→", tc.result));
+        console.groupEnd();
+      }
+
+      setChatHistory([...updatedHistory, { role: "assistant", content: data.reply }]);
+
       setMessages((prev) => {
-        const copy = prev.slice();
-        copy[copy.length - 1] = { role: "assistant", tools: resp.tools, content: resp.content };
+        const copy = [...prev];
+        copy[copy.length - 1] = {
+          role: "assistant",
+          tools: toolNames,
+          content: <span dangerouslySetInnerHTML={renderMarkdown(data.reply)} />,
+        };
         return copy;
       });
+    } catch (err) {
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = {
+          role: "assistant",
+          tools: [],
+          content: `⚠️ ${err.message}`,
+        };
+        return copy;
+      });
+    } finally {
       setBusy(false);
-    }, 1500);
+    }
   };
 
   const suggestions = ["where's the value today?", "simulate Spain v Germany", "who wins it all?", "how should I size it?"];
