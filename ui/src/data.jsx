@@ -267,6 +267,7 @@ function buildEdges(matches = MATCHES) {
   OUTRIGHTS.forEach((o) => {
     rows.push({
       kind: "outright",
+      team: o.team,
       market: `will-${o.team.toLowerCase()}-win-the-2026-world-cup`,
       title: `${o.team} to win it all`,
       sub: "Outright · 2026 World Cup",
@@ -358,6 +359,71 @@ async function loadLiveBoard() {
   }
 }
 
+// SLUG_MAP team name → RAW_MATCHES display name where they differ.
+const SLUG_NAME_OVERRIDES = { "USA": "United States" };
+
+// Fetch /api/prices — live Polymarket outright winner prices for all fixture
+// teams. On success, patches OUTRIGHTS crowd prices and adds market_price to
+// CHAMPIONSHIP entries, then rebuilds EDGES so the EdgesFeed shows real gaps.
+// On any failure, hardcoded values stay — the UI never breaks.
+async function loadLivePrices() {
+  try {
+    const res = await fetch("/api/prices", { cache: "no-store" });
+    if (!res.ok) throw new Error("prices " + res.status);
+    const data = await res.json();
+
+    const prevPrices = window.__GD_LIVE_PRICES || {};
+    const byTeam = {};
+    const livePrices = {};
+    (data.outrights || []).forEach((o) => {
+      byTeam[o.team] = o.market_price;
+      livePrices[o.team] = o.market_price;
+    });
+    // Add match-name aliases so MatchCard lookups by m.home.name work.
+    Object.entries(SLUG_NAME_OVERRIDES).forEach(([slug, matchName]) => {
+      if (livePrices[slug] != null) livePrices[matchName] = livePrices[slug];
+    });
+
+    // Detect price moves; noise floor 0.0005 filters rounding drift.
+    const moves = {};
+    Object.entries(livePrices).forEach(([team, price]) => {
+      const prev = prevPrices[team];
+      if (prev != null && Math.abs(price - prev) > 0.0005)
+        moves[team] = { dir: price > prev ? "up" : "down", from: prev, to: price };
+    });
+
+    OUTRIGHTS.forEach((o) => { if (byTeam[o.team] != null) o.crowd = byTeam[o.team]; });
+    CHAMPIONSHIP.forEach((c) => { if (byTeam[c.team] != null) c.market_price = byTeam[c.team]; });
+    const liveEdges = buildEdges(window.MATCHES || MATCHES);
+
+    Object.assign(window, {
+      OUTRIGHTS, CHAMPIONSHIP, EDGES: liveEdges,
+      GD_PRICES_LIVE: true,
+      __GD_LIVE_PRICES: livePrices,
+      __GD_PRICE_MOVES: moves,
+      __GD_PRICES_UPDATED_AT: Date.now(),
+    });
+
+    // Auto-clear move indicators after the flash animation finishes (3.5s).
+    if (Object.keys(moves).length > 0)
+      setTimeout(() => { window.__GD_PRICE_MOVES = {}; }, 3500);
+
+    return true;
+  } catch (e) {
+    Object.assign(window, { GD_PRICES_LIVE: false });
+    return false;
+  }
+}
+
+// Poll /api/prices every intervalMs and call onUpdate() whenever a fetch
+// succeeds. Returns the interval ID so the caller can cancel if needed.
+function startPricePolling(onUpdate, intervalMs = 20000) {
+  return setInterval(async () => {
+    const updated = await loadLivePrices();
+    if (updated) onUpdate();
+  }, intervalMs);
+}
+
 const fmtPct = (x, dp = 0) => (x * 100).toFixed(dp) + "%";
 const fmtPrice = (x) => x.toFixed(3);
 const fmtPts = (x) => (x >= 0 ? "+" : "−") + Math.abs(x * 100).toFixed(1);
@@ -366,5 +432,7 @@ const fmtUSD = (x) => "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2
 Object.assign(window, {
   WALLET, MATCHES, CHAMPIONSHIP, OUTRIGHTS, EDGES, MY_BETS, FLAGS,
   outcomeLabel, fmtPct, fmtPrice, fmtPts, fmtUSD,
-  loadLiveBoard, GD_LIVE: false,
+  loadLiveBoard, loadLivePrices, startPricePolling,
+  GD_LIVE: false, GD_PRICES_LIVE: false,
+  __GD_LIVE_PRICES: {}, __GD_PRICE_MOVES: {}, __GD_PRICES_UPDATED_AT: null,
 });

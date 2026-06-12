@@ -465,14 +465,71 @@ const MyBets = ({ onPlaceBet }) => (
   </div>
 );
 
+// Scrolling live odds ticker — shown at the top of the Live page.
+const PriceTicker = () => {
+  const lp = window.__GD_LIVE_PRICES || {};
+  const mv = window.__GD_PRICE_MOVES || {};
+  const entries = Object.entries(lp).filter(([t]) => !Object.values({ "United States": "USA" }).includes(t));
+  if (!entries.length || !window.GD_PRICES_LIVE) return null;
+
+  // Build a code map from all matches for flag display.
+  const codeMap = {};
+  (window.MATCHES || []).forEach((m) => {
+    codeMap[m.home.name] = m.home.code;
+    codeMap[m.away.name] = m.away.code;
+  });
+  // SLUG_MAP name → match display name for code resolution.
+  const SLUG_NAME = { "USA": "United States" };
+  entries.forEach(([t]) => { if (SLUG_NAME[t]) codeMap[t] = codeMap[SLUG_NAME[t]]; });
+
+  // Duplicate entries for seamless infinite scroll.
+  const items = [...entries, ...entries];
+
+  return (
+    <div className="price-ticker-wrap">
+      <span className="ticker-label">LIVE ODDS</span>
+      <div className="price-ticker">
+        {items.map(([team, price], i) => {
+          const move = mv[team];
+          const code = codeMap[team];
+          return (
+            <span key={i} className={"ticker-item" + (move ? " ticker-flash-" + move.dir : "")}>
+              {code && <window.GD.Flag code={code} w={14} h={10} />}
+              <span className="ticker-name">{team}</span>
+              <span className={"ticker-price mono" + (move ? (move.dir === "up" ? " neg" : " pos") : "")}>
+                {move && (move.dir === "up" ? "▲ " : "▼ ")}{window.fmtPrice(price)}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const LiveView = ({ onOpen }) => {
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const live = window.MATCHES.filter((m) => m.soon);
+  const updatedAt = window.__GD_PRICES_UPDATED_AT;
+  const secSince = updatedAt ? Math.floor((Date.now() - updatedAt) / 1000) : null;
+  const ageLabel = secSince == null ? "" : secSince < 5 ? " · just updated" : ` · odds ${secSince}s ago`;
+
   return (
     <div className="block">
       <div className="section-head">
         <h2 className="section-title serif">Live</h2>
-        <div className="section-meta"><span className="live-dot" style={{ position: "static" }} /> {live.length} kicking off soon</div>
+        <div className="section-meta">
+          <span className="live-dot" style={{ position: "static" }} />
+          {live.length} kicking off soon
+          {window.GD_PRICES_LIVE && <span className="prices-age">{ageLabel}</span>}
+        </div>
       </div>
+      <PriceTicker />
       <p className="section-sub">Matches starting within the hour. The model re-runs as line-ups confirm and prices move.</p>
       <div className="board">
         {live.map((m) => <window.GD.MatchCard key={m.id} m={m} onOpen={onOpen} />)}
