@@ -342,7 +342,76 @@ function deriveFromEngine(m, eng) {
 // Fetch /api/board (same-origin when served by goal-digger-server). On success,
 // rebuilds MATCHES + EDGES from real engine output and updates the window globals.
 // On any failure, the mock data already in place stays — the UI never breaks.
+// Build a board match object from a live /api/live-board entry (a real WC fixture
+// priced by the engine, with live score + lineup-derived adjustments). No per-match
+// Polymarket crowd price exists for group games, so crowd is shown as "—" and the
+// value-vs-crowd story lives in the Edges feed (real outright prices).
+function deriveFromLive(e) {
+  const lh = e.lambda_home, la = e.lambda_away;
+  const g = jointGrid(lh, la, 10);
+  const heat = [];
+  let peak = { h: 0, a: 0, p: 0 }, maxCell = 0;
+  for (let h = 0; h <= 5; h++) {
+    const row = [];
+    for (let a = 0; a <= 5; a++) {
+      const p = g[h][a];
+      row.push(p);
+      if (p > maxCell) maxCell = p;
+      if (p > peak.p) peak = { h, a, p };
+    }
+    heat.push(row);
+  }
+  const model = { home: e.p_home_win, draw: e.p_draw, away: e.p_away_win };
+  const crowd = { home: null, draw: null, away: null };
+  const edge = { home: 0, draw: 0, away: 0 };
+  const best = ["home", "draw", "away"].reduce((b, k) => (model[k] > model[b] ? k : b), "home");
+
+  const sc = e.score || {};
+  const liveStatuses = ["1H", "2H", "HT", "ET", "BT", "P", "LIVE"];
+  const isLive = liveStatuses.includes(e.status);
+  const sh = sc.home ?? 0, sa = sc.away ?? 0;
+  let kickoff;
+  if (e.status === "FT") kickoff = `FT · ${sh}-${sa}`;
+  else if (isLive) kickoff = `${e.elapsed ? e.elapsed + "'" : "LIVE"} · ${sh}-${sa}`;
+  else {
+    const d = new Date(e.kickoff);
+    kickoff = isNaN(d) ? "Upcoming" : d.toLocaleString("en-US", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  const adjustments = (e.adjustments || []).map((a) => ({
+    team: a.team,
+    dir: /not in starting XI/.test(a.reason) ? "down" : "flat",
+    reason: a.reason,
+  }));
+
+  return {
+    id: e.id, fixture_id: e.fixture_id,
+    comp: e.comp, kickoff, soon: e.status === "NS", live: isLive,
+    status: e.status, score: sc, venue: e.venue,
+    home: e.home, away: e.away,
+    crowd, model, edge, best,
+    sims: 50000,
+    p_over_2_5: e.p_over_2_5, p_btts: e.p_btts, p_home_advance: e.p_home_advance,
+    expected_goals_home: lh, expected_goals_away: la,
+    heat, heatMax: maxCell, peak,
+    top_scorelines: (e.top_scorelines || []).slice(0, 5),
+    adjustments,
+  };
+}
+
 async function loadLiveBoard() {
+  // 1) real tournament board (live fixtures + scores). 2) fallback: engine board
+  // over the bundled fixtures. 3) fallback: bundled mock already in place.
+  try {
+    const res = await fetch("/api/live-board", { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      const live = (data.matches || []).map(deriveFromLive);
+      if (live.length) {
+        Object.assign(window, { MATCHES: live, EDGES: buildEdges(live), GD_LIVE: true, __GD_BOARD__: data });
+        return true;
+      }
+    }
+  } catch (e) { /* fall through */ }
   try {
     const res = await fetch("/api/board", { cache: "no-store" });
     if (!res.ok) throw new Error("board " + res.status);
@@ -350,8 +419,7 @@ async function loadLiveBoard() {
     const byId = {};
     (data.matches || []).forEach((e) => { byId[e.id] = e; });
     const live = RAW_MATCHES.map((m) => (byId[m.id] ? deriveFromEngine(m, byId[m.id]) : deriveMatch(m)));
-    const liveEdges = buildEdges(live);
-    Object.assign(window, { MATCHES: live, EDGES: liveEdges, GD_LIVE: true, __GD_BOARD__: data });
+    Object.assign(window, { MATCHES: live, EDGES: buildEdges(live), GD_LIVE: true, __GD_BOARD__: data });
     return true;
   } catch (e) {
     Object.assign(window, { GD_LIVE: false });
@@ -424,8 +492,8 @@ function startPricePolling(onUpdate, intervalMs = 20000) {
   }, intervalMs);
 }
 
-const fmtPct = (x, dp = 0) => (x * 100).toFixed(dp) + "%";
-const fmtPrice = (x) => x.toFixed(3);
+const fmtPct = (x, dp = 0) => (x == null || isNaN(x)) ? "—" : (x * 100).toFixed(dp) + "%";
+const fmtPrice = (x) => (x == null || isNaN(x)) ? "—" : x.toFixed(3);
 const fmtPts = (x) => (x >= 0 ? "+" : "−") + Math.abs(x * 100).toFixed(1);
 const fmtUSD = (x) => "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
