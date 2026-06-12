@@ -189,6 +189,101 @@ pub(crate) fn tournament(q: &Query) -> Result<Value, String> {
     Ok(json!({ "championship": table }))
 }
 
+/// Live lineup-driven adjustments for a real WC fixture (needs API_FOOTBALL_KEY).
+/// Demonstrates the model reading the confirmed starting XI and adjusting itself.
+pub(crate) fn live_adjust(q: &Query) -> Result<Value, String> {
+    let home = q.get("home").ok_or("missing home")?;
+    let away = q.get("away").ok_or("missing away")?;
+    let fid = data::wc_fixture_id(home, away)
+        .ok_or_else(|| format!("no WC fixture found for {home} vs {away}"))?;
+    let (ha, hd, hr) = data::live_adjustment(home, fid);
+    let (aa, ad, ar) = data::live_adjustment(away, fid);
+    Ok(json!({
+        "source": "api-football/lineups",
+        "fixture_id": fid,
+        "home": { "team": home, "attack_adj": ha, "defense_adj": hd, "reasons": hr },
+        "away": { "team": away, "attack_adj": aa, "defense_adj": ad, "reasons": ar }
+    }))
+}
+
+/// The live board: real in-play + upcoming WC fixtures, priced by the engine with
+/// curated live-lineup adjustments, plus live scores. Needs API_FOOTBALL_KEY.
+pub(crate) fn live_board() -> Value {
+    if std::env::var("API_FOOTBALL_KEY").is_err() {
+        return json!({ "error": "API_FOOTBALL_KEY not set", "matches": [] });
+    }
+    let mut fixtures: Vec<Value> = vec![];
+    if let Ok(v) = data::wc_fixtures_live() {
+        if let Some(a) = v.get("response").and_then(|r| r.as_array()) {
+            fixtures.extend(a.iter().cloned());
+        }
+    }
+    if let Ok(v) = data::wc_fixtures_next(12) {
+        if let Some(a) = v.get("response").and_then(|r| r.as_array()) {
+            fixtures.extend(a.iter().cloned());
+        }
+    }
+
+    let is_host = |t: &str| matches!(data::team_code(t).as_str(), "USA" | "MEX" | "CAN");
+    let mut seen = std::collections::HashSet::new();
+    let mut matches = vec![];
+    for f in fixtures {
+        let fid = f["fixture"]["id"].as_u64().unwrap_or(0) as u32;
+        if fid == 0 || !seen.insert(fid) {
+            continue;
+        }
+        let home = f["teams"]["home"]["name"].as_str().unwrap_or("").to_string();
+        let away = f["teams"]["away"]["name"].as_str().unwrap_or("").to_string();
+        let (hs, as_) = match (data::team_strength(&home), data::team_strength(&away)) {
+            (Ok(h), Ok(a)) => (h, a),
+            _ => continue,
+        };
+        let (ha, hd, hr) = data::live_adjustment(&home, fid);
+        let (aa, ad, ar) = data::live_adjustment(&away, fid);
+        let setup = MatchSetup {
+            home: hs,
+            away: as_,
+            neutral: !is_host(&home),
+            host_elo_bonus: if is_host(&home) { 40.0 } else { 0.0 },
+            knockout: false,
+            home_adj: Adjustments { attack: ha, defense: hd },
+            away_adj: Adjustments { attack: aa, defense: ad },
+            seed: Some(fid as u64),
+            sims: Some(50_000),
+        };
+        let o = sim::simulate(&setup);
+        let mut adjustments = vec![];
+        for r in &hr {
+            adjustments.push(json!({ "team": home, "reason": r }));
+        }
+        for r in &ar {
+            adjustments.push(json!({ "team": away, "reason": r }));
+        }
+        matches.push(json!({
+            "id": format!("{}-{}", data::team_code(&home), data::team_code(&away)).to_lowercase(),
+            "fixture_id": fid,
+            "comp": f["league"]["round"].as_str().unwrap_or("Group Stage"),
+            "kickoff": f["fixture"]["date"].as_str().unwrap_or(""),
+            "status": f["fixture"]["status"]["short"].as_str().unwrap_or("NS"),
+            "elapsed": f["fixture"]["status"]["elapsed"],
+            "venue": f["fixture"]["venue"]["name"].as_str().unwrap_or(""),
+            "score": { "home": f["goals"]["home"], "away": f["goals"]["away"] },
+            "home": { "code": data::team_code(&home), "name": home },
+            "away": { "code": data::team_code(&away), "name": away },
+            "lambda_home": o.lambda_home, "lambda_away": o.lambda_away,
+            "p_home_win": o.p_home_win, "p_draw": o.p_draw, "p_away_win": o.p_away_win,
+            "p_home_advance": o.p_home_advance,
+            "p_over_2_5": o.p_over_2_5, "p_btts": o.p_btts,
+            "top_scorelines": o.top_scorelines,
+            "adjustments": adjustments
+        }));
+        if matches.len() >= 12 {
+            break;
+        }
+    }
+    json!({ "source": "goal-digger live (api-football + dixon-coles/monte-carlo)", "matches": matches })
+}
+
 // ─── tiny HTTP plumbing ──────────────────────────────────────────────────────
 
 pub(crate) struct Query(Vec<(String, String)>);
@@ -298,6 +393,8 @@ fn main() {
                 }
                 (Method::Get, "/api/edge") => edge(&q),
                 (Method::Get, "/api/tournament") => tournament(&q),
+                (Method::Get, "/api/live-adjust") => live_adjust(&q),
+                (Method::Get, "/api/live-board") => Ok(live_board()),
                 (Method::Get, "/api/prices") => Ok(prices()),
                 (Method::Post, "/api/chat") => {
                     let mut body = String::new();

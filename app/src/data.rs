@@ -114,6 +114,223 @@ pub fn injuries(team_id: u32) -> Result<Value, String> {
     )
 }
 
+// ─── Live lineup-driven adjustments (API-FOOTBALL) ───────────────────────────
+// WC 2026 has no injury feed, but lineups and player ratings ARE live. We derive
+// each team's expected-goals adjustment from who is actually in the starting XI
+// vs the team's highest-rated players. Stronger signal than injury rumors.
+
+static AF_CACHE: LazyLock<std::sync::Mutex<HashMap<String, Value>>> =
+    LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+
+/// Process-lifetime cache over API-FOOTBALL GETs (also freezes data for a demo run).
+fn af_cached(path: &str, query: &[(&str, String)]) -> Result<Value, String> {
+    let key = format!("{path}?{query:?}");
+    if let Some(v) = AF_CACHE.lock().unwrap().get(&key) {
+        return Ok(v.clone());
+    }
+    let v = af_get(path, query)?;
+    AF_CACHE.lock().unwrap().insert(key, v.clone());
+    Ok(v)
+}
+
+fn norm_team(s: &str) -> String {
+    match s.trim().to_lowercase().as_str() {
+        "usa" | "united states" | "usmnt" => "usa".into(),
+        other => other.to_string(),
+    }
+}
+
+const PLAYERS_JSON: &str = include_str!("../data/players.json");
+
+/// Curated key players per team: normalized team name -> [(name, position-letter)].
+static KEY_PLAYERS: LazyLock<HashMap<String, Vec<(String, char)>>> = LazyLock::new(|| {
+    let raw: serde_json::Map<String, Value> = serde_json::from_str(PLAYERS_JSON).unwrap_or_default();
+    let mut m = HashMap::new();
+    for (team, arr) in raw {
+        if team.starts_with('_') {
+            continue;
+        }
+        let players: Vec<(String, char)> = arr
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|p| {
+                        let pr = p.as_array()?;
+                        let name = pr.first()?.as_str()?.to_string();
+                        let pos = pr.get(1)?.as_str()?.chars().next()?.to_ascii_uppercase();
+                        Some((name, pos))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        m.insert(norm_team(&team), players);
+    }
+    m
+});
+
+/// ASCII-lowercase letters only, so accented names match the lineup feed.
+fn simplify(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii_alphabetic()).flat_map(|c| c.to_lowercase()).collect()
+}
+
+/// Resolve an API-FOOTBALL team id by name (cached WC teams list).
+pub fn wc_team_id(name: &str) -> Option<u32> {
+    let v = af_cached(
+        "/teams",
+        &[("league", WC_LEAGUE_ID.to_string()), ("season", WC_SEASON.to_string())],
+    )
+    .ok()?;
+    let want = norm_team(name);
+    v.get("response")?.as_array()?.iter().find_map(|t| {
+        let team = t.get("team")?;
+        if norm_team(team.get("name")?.as_str()?) == want {
+            team.get("id")?.as_u64().map(|n| n as u32)
+        } else {
+            None
+        }
+    })
+}
+
+/// Top key players by current WC rating: (name, position-letter G/D/M/A, rating).
+fn wc_key_players(team_id: u32) -> Vec<(String, char, f64)> {
+    let v = match af_cached(
+        "/players",
+        &[("team", team_id.to_string()), ("season", WC_SEASON.to_string()), ("page", "1".into())],
+    ) {
+        Ok(v) => v,
+        Err(_) => return vec![],
+    };
+    let mut out: Vec<(String, char, f64)> = v
+        .get("response")
+        .and_then(|r| r.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|p| {
+                    let name = p.get("player")?.get("name")?.as_str()?.to_string();
+                    let st = p.get("statistics")?.as_array()?.first()?;
+                    let pos = st.get("games")?.get("position")?.as_str().unwrap_or("M");
+                    let rating: f64 = st
+                        .get("games")?
+                        .get("rating")
+                        .and_then(|r| r.as_str())
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(0.0);
+                    let pc = pos.chars().next().unwrap_or('M').to_ascii_uppercase();
+                    Some((name, pc, rating))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    out.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+    out.truncate(6);
+    out
+}
+
+/// Find the WC fixture id for a matchup (either home/away orientation).
+pub fn wc_fixture_id(home: &str, away: &str) -> Option<u32> {
+    let v = af_cached(
+        "/fixtures",
+        &[("league", WC_LEAGUE_ID.to_string()), ("season", WC_SEASON.to_string())],
+    )
+    .ok()?;
+    let (h, a) = (norm_team(home), norm_team(away));
+    v.get("response")?.as_array()?.iter().find_map(|f| {
+        let teams = f.get("teams")?;
+        let th = norm_team(teams.get("home")?.get("name")?.as_str()?);
+        let ta = norm_team(teams.get("away")?.get("name")?.as_str()?);
+        if (th == h && ta == a) || (th == a && ta == h) {
+            f.get("fixture")?.get("id")?.as_u64().map(|n| n as u32)
+        } else {
+            None
+        }
+    })
+}
+
+/// Starting-XI player names for a team in a fixture (None if lineup not posted).
+fn wc_startxi(fixture_id: u32, team_id: u32) -> Option<Vec<String>> {
+    let v = af_cached("/fixtures/lineups", &[("fixture", fixture_id.to_string())]).ok()?;
+    let arr = v.get("response")?.as_array()?;
+    for t in arr {
+        if t.get("team")?.get("id")?.as_u64()? as u32 == team_id {
+            let xi = t
+                .get("startXI")?
+                .as_array()?
+                .iter()
+                .filter_map(|p| p.get("player")?.get("name")?.as_str().map(|s| s.to_string()))
+                .collect();
+            return Some(xi);
+        }
+    }
+    None
+}
+
+/// Live attack/defense multipliers for a team, from who is missing from the XI.
+/// A team's defense multiplier scales the OPPONENT's goals (matches the engine).
+/// Returns (attack_mult, defense_mult, reasons). Neutral if lineup not posted.
+pub fn live_adjustment(team_name: &str, fixture_id: u32) -> (f64, f64, Vec<String>) {
+    let stars = match KEY_PLAYERS.get(&norm_team(team_name)) {
+        Some(s) if !s.is_empty() => s,
+        _ => return (1.0, 1.0, vec![format!("{team_name}: no key-player list")]),
+    };
+    let tid = match wc_team_id(team_name) {
+        Some(t) => t,
+        None => return (1.0, 1.0, vec![format!("{team_name}: not found in WC teams")]),
+    };
+    let xi = match wc_startxi(fixture_id, tid) {
+        Some(x) => x,
+        None => return (1.0, 1.0, vec![format!("{team_name}: lineup not posted yet")]),
+    };
+    let xi_simplified: Vec<String> = xi.iter().map(|n| simplify(n)).collect();
+    let (mut atk, mut def) = (1.0_f64, 1.0_f64);
+    let mut reasons = vec![];
+    for (name, pos) in stars {
+        let surname = name.split_whitespace().last().unwrap_or(name);
+        let key = simplify(surname);
+        if key.len() >= 3 && xi_simplified.iter().any(|x| x.contains(&key)) {
+            continue; // key player is starting
+        }
+        let (a, d, role) = match pos {
+            'A' => (0.95, 1.0, "attacker"),
+            'M' => (0.97, 1.0, "midfielder"),
+            'D' => (1.0, 1.06, "defender"),
+            'G' => (1.0, 1.08, "goalkeeper"),
+            _ => (0.98, 1.0, "player"),
+        };
+        atk *= a;
+        def *= d;
+        reasons.push(format!("{name} ({role}) not in starting XI"));
+    }
+    if reasons.is_empty() {
+        reasons.push(format!("{team_name}: key players all starting"));
+    }
+    (atk.clamp(0.6, 1.4), def.clamp(0.6, 1.4), reasons)
+}
+
+/// The next N upcoming WC fixtures (uncached so live scores stay fresh on poll).
+pub fn wc_fixtures_next(n: u32) -> Result<Value, String> {
+    af_get(
+        "/fixtures",
+        &[
+            ("league", WC_LEAGUE_ID.to_string()),
+            ("season", WC_SEASON.to_string()),
+            ("next", n.to_string()),
+        ],
+    )
+}
+
+/// Currently in-play WC fixtures (live scores).
+pub fn wc_fixtures_live() -> Result<Value, String> {
+    af_get("/fixtures", &[("league", WC_LEAGUE_ID.to_string()), ("live", "all".into())])
+}
+
+/// Short team code (ESP, GER, ...) from the bundled alias list.
+pub fn team_code(name: &str) -> String {
+    TEAMS
+        .get(&norm(name))
+        .and_then(|r| r.aliases.first().cloned())
+        .unwrap_or_else(|| name.chars().take(3).collect::<String>().to_uppercase())
+}
+
 // ─── Polymarket Gamma (public, no key) ───────────────────────────────────────
 
 /// Fetch a market by slug and return its outcomes with current prices.
