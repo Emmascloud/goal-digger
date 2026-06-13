@@ -85,6 +85,7 @@ fn af_get(path: &str, query: &[(&str, String)]) -> Result<Value, String> {
         .get(format!("{APIFOOTBALL_BASE}{path}"))
         .header("x-apisports-key", key)
         .query(query)
+        .timeout(std::time::Duration::from_secs(12))
         .send()
         .map_err(|e| format!("[goal-digger] api-football request failed: {e}"))?
         .json::<Value>()
@@ -331,6 +332,68 @@ pub fn team_code(name: &str) -> String {
         .unwrap_or_else(|| name.chars().take(3).collect::<String>().to_uppercase())
 }
 
+// ─── Polymarket per-match prices (the real WC match markets) ─────────────────
+// Each 2026 WC match is a 3-way market on Polymarket under a `fifwc-...` slug:
+// "Will {home} win?", "Will {away} win?", "Will it end in a draw?". We find it by
+// search and return the three Yes prices to compare against the model.
+
+fn gamma_get(path: &str, query: &[(&str, String)]) -> Result<Value, String> {
+    let ck = format!("gamma{path}?{query:?}");
+    if let Some(v) = AF_CACHE.lock().unwrap().get(&ck) {
+        return Ok(v.clone());
+    }
+    let client = reqwest::blocking::Client::new();
+    let v = client
+        .get(format!("{GAMMA_BASE}{path}"))
+        .query(query)
+        .timeout(std::time::Duration::from_secs(12))
+        .send()
+        .map_err(|e| format!("[goal-digger] gamma req failed: {e}"))?
+        .json::<Value>()
+        .map_err(|e| format!("[goal-digger] gamma parse failed: {e}"))?;
+    AF_CACHE.lock().unwrap().insert(ck, v.clone());
+    Ok(v)
+}
+
+fn first_price(v: Option<&Value>) -> Option<f64> {
+    parse_str_array(v).first().and_then(|s| s.parse::<f64>().ok())
+}
+
+/// Live Polymarket 3-way prices for a real WC match: (home_win, draw, away_win).
+/// None if the market is not found, is settled, or the team names don't match.
+pub fn match_market(home: &str, away: &str) -> Option<(f64, f64, f64)> {
+    let search = gamma_get(
+        "/public-search",
+        &[("q", format!("{home} vs {away}")), ("limit_per_type", "10".into())],
+    )
+    .ok()?;
+    let slug = search.get("events")?.as_array()?.iter().find_map(|e| {
+        e.get("slug")
+            .and_then(|s| s.as_str())
+            .filter(|s| s.starts_with("fifwc-"))
+            .map(|s| s.to_string())
+    })?;
+    let ev = gamma_get("/events", &[("slug", slug)]).ok()?;
+    let ev = ev.as_array()?.first()?;
+    if ev.get("closed").and_then(|c| c.as_bool()).unwrap_or(false) {
+        return None;
+    }
+    let (hl, al) = (home.to_lowercase(), away.to_lowercase());
+    let (mut ph, mut pd, mut pa) = (None, None, None);
+    for m in ev.get("markets")?.as_array()? {
+        let q = m.get("question")?.as_str()?.to_lowercase();
+        let yes = first_price(m.get("outcomePrices"));
+        if q.contains("draw") {
+            pd = yes;
+        } else if q.contains(&hl) {
+            ph = yes;
+        } else if q.contains(&al) {
+            pa = yes;
+        }
+    }
+    Some((ph?, pd?, pa?))
+}
+
 // ─── Polymarket Gamma (public, no key) ───────────────────────────────────────
 
 /// Fetch a market by slug and return its outcomes with current prices.
@@ -339,6 +402,7 @@ pub fn gamma_market(slug: &str) -> Result<Value, String> {
     let arr = client
         .get(format!("{GAMMA_BASE}/markets"))
         .query(&[("slug", slug)])
+        .timeout(std::time::Duration::from_secs(12))
         .send()
         .map_err(|e| format!("[goal-digger] gamma request failed: {e}"))?
         .json::<Value>()

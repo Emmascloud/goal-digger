@@ -362,9 +362,16 @@ function deriveFromLive(e) {
     heat.push(row);
   }
   const model = { home: e.p_home_win, draw: e.p_draw, away: e.p_away_win };
-  const crowd = { home: null, draw: null, away: null };
-  const edge = { home: 0, draw: 0, away: 0 };
-  const best = ["home", "draw", "away"].reduce((b, k) => (model[k] > model[b] ? k : b), "home");
+  // real Polymarket 3-way prices when the match market exists, else "—"
+  const crowd = e.crowd
+    ? { home: e.crowd.home, draw: e.crowd.draw, away: e.crowd.away }
+    : { home: null, draw: null, away: null };
+  const edge = e.edge
+    ? { home: e.edge.home, draw: e.edge.draw, away: e.edge.away }
+    : { home: 0, draw: 0, away: 0 };
+  // best = biggest positive edge if we have a market, else highest model
+  const rank = e.edge ? edge : model;
+  const best = ["home", "draw", "away"].reduce((b, k) => (rank[k] > rank[b] ? k : b), "home");
 
   const sc = e.score || {};
   const liveStatuses = ["1H", "2H", "HT", "ET", "BT", "P", "LIVE"];
@@ -399,8 +406,9 @@ function deriveFromLive(e) {
 }
 
 async function loadLiveBoard() {
-  // 1) real tournament board (live fixtures + scores). 2) fallback: engine board
-  // over the bundled fixtures. 3) fallback: bundled mock already in place.
+  // Real tournament board only (live fixtures + scores + Polymarket prices).
+  // Empty snapshot (server still warming) or no server => return false; the bundled
+  // mock already on screen stays, and the bootstrap retries until the snapshot is ready.
   try {
     const res = await fetch("/api/live-board", { cache: "no-store" });
     if (res.ok) {
@@ -412,19 +420,8 @@ async function loadLiveBoard() {
       }
     }
   } catch (e) { /* fall through */ }
-  try {
-    const res = await fetch("/api/board", { cache: "no-store" });
-    if (!res.ok) throw new Error("board " + res.status);
-    const data = await res.json();
-    const byId = {};
-    (data.matches || []).forEach((e) => { byId[e.id] = e; });
-    const live = RAW_MATCHES.map((m) => (byId[m.id] ? deriveFromEngine(m, byId[m.id]) : deriveMatch(m)));
-    Object.assign(window, { MATCHES: live, EDGES: buildEdges(live), GD_LIVE: true, __GD_BOARD__: data });
-    return true;
-  } catch (e) {
-    Object.assign(window, { GD_LIVE: false });
-    return false;
-  }
+  Object.assign(window, { GD_LIVE: false });
+  return false;
 }
 
 // SLUG_MAP team name → RAW_MATCHES display name where they differ.

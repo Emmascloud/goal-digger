@@ -25,6 +25,11 @@ use tiny_http::{Header, Method, Response, Server};
 
 const ADDR: &str = "127.0.0.1:8787";
 
+/// Cached live-board snapshot, refreshed in the background so the endpoint is instant
+/// no matter how slow the underlying API calls are.
+static BOARD: std::sync::LazyLock<std::sync::Mutex<Value>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(json!({ "matches": [], "warming": true })));
+
 /// One board fixture with the engine inputs that mirror the UI's RAW_MATCHES.
 struct Fixture {
     id: &'static str,
@@ -259,7 +264,7 @@ pub(crate) fn live_board() -> Value {
         for r in &ar {
             adjustments.push(json!({ "team": away, "reason": r }));
         }
-        matches.push(json!({
+        let mut row = json!({
             "id": format!("{}-{}", data::team_code(&home), data::team_code(&away)).to_lowercase(),
             "fixture_id": fid,
             "comp": f["league"]["round"].as_str().unwrap_or("Group Stage"),
@@ -268,15 +273,26 @@ pub(crate) fn live_board() -> Value {
             "elapsed": f["fixture"]["status"]["elapsed"],
             "venue": f["fixture"]["venue"]["name"].as_str().unwrap_or(""),
             "score": { "home": f["goals"]["home"], "away": f["goals"]["away"] },
-            "home": { "code": data::team_code(&home), "name": home },
-            "away": { "code": data::team_code(&away), "name": away },
+            "home": { "code": data::team_code(&home), "name": home.clone() },
+            "away": { "code": data::team_code(&away), "name": away.clone() },
             "lambda_home": o.lambda_home, "lambda_away": o.lambda_away,
             "p_home_win": o.p_home_win, "p_draw": o.p_draw, "p_away_win": o.p_away_win,
             "p_home_advance": o.p_home_advance,
             "p_over_2_5": o.p_over_2_5, "p_btts": o.p_btts,
             "top_scorelines": o.top_scorelines,
             "adjustments": adjustments
-        }));
+        });
+        // Real Polymarket 3-way prices for this match -> crowd + per-outcome edge.
+        if let Some((ph, pd, pa)) = data::match_market(&home, &away) {
+            let r2 = |x: f64| (x * 10000.0).round() / 10000.0;
+            row["crowd"] = json!({ "home": ph, "draw": pd, "away": pa });
+            row["edge"] = json!({
+                "home": r2(o.p_home_win - ph),
+                "draw": r2(o.p_draw - pd),
+                "away": r2(o.p_away_win - pa)
+            });
+        }
+        matches.push(row);
         if matches.len() >= 12 {
             break;
         }
@@ -377,6 +393,19 @@ fn serve_static(url: &str) -> Response<std::io::Cursor<Vec<u8>>> {
 fn main() {
     let server = Server::http(ADDR).expect("bind");
     println!("Goal Digger engine server on http://{ADDR}  (serving {})", ui_dir().display());
+    // Compute the board in the background and refresh it every 60s. The endpoint
+    // serves the latest snapshot instantly instead of blocking on ~60 API calls.
+    if std::env::var("API_FOOTBALL_KEY").is_ok() {
+        std::thread::spawn(|| loop {
+            let v = live_board();
+            let n = v.get("matches").and_then(|m| m.as_array()).map(|a| a.len()).unwrap_or(0);
+            if let Ok(mut g) = BOARD.lock() {
+                *g = v;
+            }
+            println!("[board] snapshot refreshed ({n} matches)");
+            std::thread::sleep(std::time::Duration::from_secs(60));
+        });
+    }
     for mut req in server.incoming_requests() {
         let url = req.url().to_string();
         let path = url.splitn(2, '?').next().unwrap_or("/").to_string();
@@ -394,7 +423,9 @@ fn main() {
                 (Method::Get, "/api/edge") => edge(&q),
                 (Method::Get, "/api/tournament") => tournament(&q),
                 (Method::Get, "/api/live-adjust") => live_adjust(&q),
-                (Method::Get, "/api/live-board") => Ok(live_board()),
+                (Method::Get, "/api/live-board") => {
+                    Ok(BOARD.lock().map(|g| g.clone()).unwrap_or_else(|_| json!({ "matches": [] })))
+                }
                 (Method::Get, "/api/prices") => Ok(prices()),
                 (Method::Post, "/api/chat") => {
                     let mut body = String::new();
