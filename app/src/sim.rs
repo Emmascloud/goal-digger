@@ -384,3 +384,369 @@ fn round2(x: f64) -> f64 {
 fn round4(x: f64) -> f64 {
     (x * 10_000.0).round() / 10_000.0
 }
+
+// ============================================================================
+// CONDITIONAL EVENT SIMULATION (player props, "if X then Y" markets)
+//
+// Additive only: does not modify simulate(), MatchOutcome, MatchSetup,
+// TeamStrength, or Adjustments above. Reuses expected_goals(),
+// scoreline_matrix(), sample_scoreline(), and round4() as-is, with the same
+// StdRng seeding convention as simulate().
+// ============================================================================
+
+/// A player's role inputs for conditional/prop simulation.
+/// `goal_share` is this player's share of their TEAM's total goals
+/// (0.0–1.0; the remainder is implicitly "other players / own goals").
+#[derive(Clone, Debug, Deserialize)]
+pub struct PlayerProfile {
+    pub name: String,
+    /// Share of this team's goals scored by this player when on the pitch.
+    pub goal_share: f64,
+    /// Probability this player is substituted off at some point.
+    pub sub_off_prob: f64,
+    /// Mean minute of substitution, if subbed off.
+    pub sub_off_minute_mean: f64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+pub enum Side {
+    Home,
+    Away,
+}
+
+/// A condition that may or may not occur during a simulated match.
+/// If it occurs, it has a "trigger minute" used to evaluate `EventOutcome`
+/// for the `*After` variants.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum EventCondition {
+    /// Named player is substituted off at some point.
+    PlayerSubbedOff { player: String },
+    /// Named player scores at least one goal (trigger = minute of their first goal).
+    PlayerScores { player: String },
+    /// Given side is ahead on aggregate goals at the given minute.
+    TeamLeadsAtMinute { side: Side, minute: u32 },
+}
+
+/// The outcome whose probability we want, optionally conditioned on
+/// `EventCondition` above.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum EventOutcome {
+    /// Given side scores at least once AFTER the condition's trigger minute.
+    /// (Unconditional baseline: side scores at least once in the match.)
+    TeamScoresAfter { side: Side },
+    /// Named player scores at least once anywhere in the match.
+    PlayerScoresAnytime { player: String },
+    /// Given side scores at least once anywhere in the match.
+    TeamScoresAnytime { side: Side },
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ConditionalResult {
+    /// P(condition occurs at all) across all sims.
+    pub p_condition: f64,
+    /// P(outcome | condition occurred).
+    pub p_outcome_given_condition: f64,
+    /// P(outcome) unconditionally — for edge comparison against the same
+    /// market without the condition.
+    pub p_outcome_unconditional: f64,
+    pub sims_with_condition: usize,
+    pub sims_total: usize,
+}
+
+/// One player's sampled substitution outcome for a single simulation.
+struct SubInfo {
+    off: bool,
+    minute: u32,
+}
+
+/// Sample a goal minute uniformly in 1..=90.
+/// v1 simplification: uniform across the match. Refinement (more goals in
+/// the second half) can be added later without changing the public API.
+fn sample_minute(rng: &mut StdRng) -> u32 {
+    ((rng.r#gen::<f64>() * 90.0).floor() as u32 + 1).min(90)
+}
+
+/// Pick which player (by index into `players`) scores a given goal, weighted
+/// by `goal_share`. Returns `None` if the goal falls into the residual
+/// "other players / own goal" bucket (1.0 - sum(goal_share)).
+fn pick_scorer(players: &[PlayerProfile], rng: &mut StdRng) -> Option<usize> {
+    let known: f64 = players.iter().map(|p| p.goal_share.max(0.0)).sum();
+    let other = (1.0 - known).max(0.0);
+    let total = known + other;
+    if total <= 0.0 {
+        return None;
+    }
+    let r = rng.r#gen::<f64>() * total;
+    let mut acc = 0.0;
+    for (idx, p) in players.iter().enumerate() {
+        acc += p.goal_share.max(0.0);
+        if r <= acc {
+            return Some(idx);
+        }
+    }
+    None // residual bucket
+}
+
+/// Sample whether a player is subbed off, and if so, when.
+/// Minute is `sub_off_minute_mean` with +/-8 minute jitter, clamped to 1..=90.
+fn sample_sub(p: &PlayerProfile, rng: &mut StdRng) -> SubInfo {
+    let off = rng.r#gen::<f64>() < p.sub_off_prob;
+    if !off {
+        return SubInfo { off: false, minute: 90 };
+    }
+    let jitter = (rng.r#gen::<f64>() - 0.5) * 16.0; // +/- 8 minutes
+    let minute = ((p.sub_off_minute_mean + jitter).round() as i64).clamp(1, 90) as u32;
+    SubInfo { off: true, minute }
+}
+
+/// True if the named player scored in this simulation (either side).
+fn player_scored(
+    player: &str,
+    home_players: &[PlayerProfile],
+    away_players: &[PlayerProfile],
+    home_scorers: &[Option<usize>],
+    away_scorers: &[Option<usize>],
+) -> bool {
+    if let Some(idx) = home_players.iter().position(|p| p.name.eq_ignore_ascii_case(player)) {
+        return home_scorers.iter().any(|sc| *sc == Some(idx));
+    }
+    if let Some(idx) = away_players.iter().position(|p| p.name.eq_ignore_ascii_case(player)) {
+        return away_scorers.iter().any(|sc| *sc == Some(idx));
+    }
+    false
+}
+
+/// Evaluate `condition` for one simulation. Returns `Some(trigger_minute)` if
+/// the condition occurred, `None` otherwise.
+#[allow(clippy::too_many_arguments)]
+fn eval_condition(
+    cond: &EventCondition,
+    home_players: &[PlayerProfile],
+    away_players: &[PlayerProfile],
+    home_scorers: &[Option<usize>],
+    home_minutes: &[u32],
+    away_scorers: &[Option<usize>],
+    away_minutes: &[u32],
+    home_subs: &[SubInfo],
+    away_subs: &[SubInfo],
+) -> Option<u32> {
+    match cond {
+        EventCondition::PlayerSubbedOff { player } => {
+            if let Some(idx) = home_players.iter().position(|p| p.name.eq_ignore_ascii_case(player)) {
+                if home_subs[idx].off {
+                    return Some(home_subs[idx].minute);
+                }
+            }
+            if let Some(idx) = away_players.iter().position(|p| p.name.eq_ignore_ascii_case(player)) {
+                if away_subs[idx].off {
+                    return Some(away_subs[idx].minute);
+                }
+            }
+            None
+        }
+        EventCondition::PlayerScores { player } => {
+            if let Some(idx) = home_players.iter().position(|p| p.name.eq_ignore_ascii_case(player)) {
+                return home_scorers
+                    .iter()
+                    .zip(home_minutes.iter())
+                    .filter(|(sc, _)| **sc == Some(idx))
+                    .map(|(_, &m)| m)
+                    .min();
+            }
+            if let Some(idx) = away_players.iter().position(|p| p.name.eq_ignore_ascii_case(player)) {
+                return away_scorers
+                    .iter()
+                    .zip(away_minutes.iter())
+                    .filter(|(sc, _)| **sc == Some(idx))
+                    .map(|(_, &m)| m)
+                    .min();
+            }
+            None
+        }
+        EventCondition::TeamLeadsAtMinute { side, minute } => {
+            let h = home_minutes.iter().filter(|&&m| m <= *minute).count();
+            let a = away_minutes.iter().filter(|&&m| m <= *minute).count();
+            let leads = match side {
+                Side::Home => h > a,
+                Side::Away => a > h,
+            };
+            if leads {
+                Some(*minute)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// Evaluate `outcome` GIVEN that `condition` fired at `trigger_minute`.
+#[allow(clippy::too_many_arguments)]
+fn eval_outcome_after(
+    outcome: &EventOutcome,
+    trigger_minute: u32,
+    home_minutes: &[u32],
+    away_minutes: &[u32],
+    home_scorers: &[Option<usize>],
+    away_scorers: &[Option<usize>],
+    home_players: &[PlayerProfile],
+    away_players: &[PlayerProfile],
+) -> bool {
+    match outcome {
+        EventOutcome::TeamScoresAfter { side } => {
+            let minutes = match side {
+                Side::Home => home_minutes,
+                Side::Away => away_minutes,
+            };
+            minutes.iter().any(|&m| m > trigger_minute)
+        }
+        EventOutcome::PlayerScoresAnytime { player } => {
+            player_scored(player, home_players, away_players, home_scorers, away_scorers)
+        }
+        EventOutcome::TeamScoresAnytime { side } => {
+            let minutes = match side {
+                Side::Home => home_minutes,
+                Side::Away => away_minutes,
+            };
+            !minutes.is_empty()
+        }
+    }
+}
+
+/// Evaluate `outcome` as an UNCONDITIONAL baseline (every simulation, no
+/// trigger minute). For the `*After` variant this is "scores at least once
+/// in the match" — the natural baseline to compare the conditional edge against.
+fn eval_outcome_unconditional(
+    outcome: &EventOutcome,
+    home_minutes: &[u32],
+    away_minutes: &[u32],
+    home_scorers: &[Option<usize>],
+    away_scorers: &[Option<usize>],
+    home_players: &[PlayerProfile],
+    away_players: &[PlayerProfile],
+) -> bool {
+    match outcome {
+        EventOutcome::TeamScoresAfter { side } | EventOutcome::TeamScoresAnytime { side } => {
+            let minutes = match side {
+                Side::Home => home_minutes,
+                Side::Away => away_minutes,
+            };
+            !minutes.is_empty()
+        }
+        EventOutcome::PlayerScoresAnytime { player } => {
+            player_scored(player, home_players, away_players, home_scorers, away_scorers)
+        }
+    }
+}
+
+/// Run the conditional / player-prop Monte-Carlo.
+///
+/// Reuses the SAME Dixon-Coles scoreline distribution as `simulate()`
+/// (via `expected_goals` + `scoreline_matrix` + `sample_scoreline`), then
+/// additionally samples goal minutes, goal scorers (weighted by
+/// `goal_share`), and substitution timing per simulation to evaluate
+/// `condition` and `outcome`.
+///
+/// `home_players` / `away_players` may be empty (team not yet in
+/// `players.json`) — in that case any condition or outcome referencing a
+/// named player simply never fires, and `p_condition` / relevant
+/// probabilities come back as 0.0 rather than panicking.
+pub fn simulate_conditional(
+    s: &MatchSetup,
+    home_players: &[PlayerProfile],
+    away_players: &[PlayerProfile],
+    condition: &EventCondition,
+    outcome: &EventOutcome,
+) -> ConditionalResult {
+    let (lh, la) = expected_goals(s);
+    let matrix = scoreline_matrix(lh, la);
+    let n = MAX_GOALS + 1;
+
+    let mut cdf: Vec<(usize, usize, f64)> = Vec::with_capacity(n * n);
+    let mut acc = 0.0;
+    for i in 0..n {
+        for j in 0..n {
+            acc += matrix[i][j];
+            cdf.push((i, j, acc));
+        }
+    }
+
+    let sims = s.sims.unwrap_or(DEFAULT_SIMS).clamp(1_000, 200_000);
+    let mut rng = match s.seed {
+        Some(seed) => StdRng::seed_from_u64(seed),
+        None => StdRng::seed_from_u64(0x60A1_D16E_2026_0609),
+    };
+
+    let mut with_condition = 0usize;
+    let mut outcome_given_condition = 0usize;
+    let mut outcome_unconditional = 0usize;
+
+    for _ in 0..sims {
+        let (gh, ga) = sample_scoreline(&cdf, &mut rng);
+
+        let home_minutes: Vec<u32> = (0..gh).map(|_| sample_minute(&mut rng)).collect();
+        let away_minutes: Vec<u32> = (0..ga).map(|_| sample_minute(&mut rng)).collect();
+
+        let home_scorers: Vec<Option<usize>> =
+            (0..gh).map(|_| pick_scorer(home_players, &mut rng)).collect();
+        let away_scorers: Vec<Option<usize>> =
+            (0..ga).map(|_| pick_scorer(away_players, &mut rng)).collect();
+
+        let home_subs: Vec<SubInfo> = home_players.iter().map(|p| sample_sub(p, &mut rng)).collect();
+        let away_subs: Vec<SubInfo> = away_players.iter().map(|p| sample_sub(p, &mut rng)).collect();
+
+        let trigger = eval_condition(
+            condition,
+            home_players,
+            away_players,
+            &home_scorers,
+            &home_minutes,
+            &away_scorers,
+            &away_minutes,
+            &home_subs,
+            &away_subs,
+        );
+
+        if let Some(trigger_minute) = trigger {
+            with_condition += 1;
+            if eval_outcome_after(
+                outcome,
+                trigger_minute,
+                &home_minutes,
+                &away_minutes,
+                &home_scorers,
+                &away_scorers,
+                home_players,
+                away_players,
+            ) {
+                outcome_given_condition += 1;
+            }
+        }
+
+        if eval_outcome_unconditional(
+            outcome,
+            &home_minutes,
+            &away_minutes,
+            &home_scorers,
+            &away_scorers,
+            home_players,
+            away_players,
+        ) {
+            outcome_unconditional += 1;
+        }
+    }
+
+    let f = sims as f64;
+    ConditionalResult {
+        p_condition: round4(with_condition as f64 / f),
+        p_outcome_given_condition: if with_condition > 0 {
+            round4(outcome_given_condition as f64 / with_condition as f64)
+        } else {
+            0.0
+        },
+        p_outcome_unconditional: round4(outcome_unconditional as f64 / f),
+        sims_with_condition: with_condition,
+        sims_total: sims,
+    }
+}

@@ -27,7 +27,6 @@
   <script type="text/babel" src="src/data.jsx"></script>
   <script type="text/babel" src="src/components.jsx"></script>
   <script type="text/babel" src="src/views.jsx"></script>
-  <script type="text/babel" src="src/policies.jsx"></script>
 
   <script type="text/babel">
     const { useState } = React;
@@ -49,8 +48,6 @@
         center = <G.EdgesFeed onPlaceBet={placeBet} onOpen={openMatch} />;
       } else if (active === "mybets") {
         center = <G.MyBets onPlaceBet={placeBet} />;
-      } else if (active === "policies") {
-        center = <G.PoliciesView onPlaceBet={placeBet} />;
       } else {
         center = <G.LiveView onOpen={openMatch} />;
       }
@@ -77,21 +74,8 @@
       draw(); // instant render with bundled data
       // upgrade to real Rust-engine numbers when served by goal-digger-server;
       // stays on bundled mock when opened as a bare file (fetch just fails).
-      let boardLive = false;
       if (window.loadLiveBoard) {
-        try { boardLive = await window.loadLiveBoard(); if (boardLive) draw(); } catch (e) {}
-      }
-      // if the server is still computing its first snapshot, keep retrying until live
-      if (!boardLive && window.loadLiveBoard) {
-        const retry = setInterval(async () => {
-          try { if (await window.loadLiveBoard()) { draw(); clearInterval(retry); } } catch (e) {}
-        }, 15000);
-      }
-      if (window.loadLivePrices) {
-        try { if (await window.loadLivePrices()) draw(); } catch (e) {}
-      }
-      if (window.startPricePolling) {
-        window.startPricePolling(draw);
+        try { if (await window.loadLiveBoard()) draw(); } catch (e) {}
       }
     })();
   </script>
