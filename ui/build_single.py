@@ -14,6 +14,7 @@ brand = read("src/brand-camel.js")
 data_jsx = read("src/data.jsx")
 components_jsx = read("src/components.jsx")
 views_jsx = read("src/views.jsx")
+policies_jsx = read("src/policies.jsx")
 
 png = base64.b64encode((ui / "assets/aomi-symbol-pink.png").read_bytes()).decode()
 views_jsx = views_jsx.replace('src="assets/aomi-symbol-pink.png"', f'src="data:image/png;base64,{png}"')
@@ -51,6 +52,9 @@ html = f"""<!DOCTYPE html>
   </script>
   <script type="text/babel">
 {views_jsx}
+  </script>
+  <script type="text/babel">
+{policies_jsx}
   </script>
   <script type="text/babel">
 {app_inline}

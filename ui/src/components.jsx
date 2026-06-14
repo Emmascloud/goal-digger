@@ -222,6 +222,7 @@ const LeftRail = ({ active, setActive }) => {
   const items = [
     { k: "board", label: "Board", icon: "layout-grid" },
     { k: "edges", label: "Edges", icon: "trending-up", count: window.EDGES.length },
+    { k: "policies", label: "Policies", icon: "target" },
     { k: "mybets", label: "My Bets", icon: "receipt-text", count: window.MY_BETS.length },
     { k: "live", label: "Live", icon: "radio", live: true },
   ];

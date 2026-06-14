@@ -27,6 +27,7 @@
   <script type="text/babel" src="src/data.jsx"></script>
   <script type="text/babel" src="src/components.jsx"></script>
   <script type="text/babel" src="src/views.jsx"></script>
+  <script type="text/babel" src="src/policies.jsx"></script>
 
   <script type="text/babel">
     const { useState } = React;
@@ -48,6 +49,8 @@
         center = <G.EdgesFeed onPlaceBet={placeBet} onOpen={openMatch} />;
       } else if (active === "mybets") {
         center = <G.MyBets onPlaceBet={placeBet} />;
+      } else if (active === "policies") {
+        center = <G.PoliciesView onPlaceBet={placeBet} />;
       } else {
         center = <G.LiveView onOpen={openMatch} />;
       }
